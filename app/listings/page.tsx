@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { HUBS, hubName } from '@/lib/hubs'
+import { SiteHeader } from '@/components/SiteHeader'
 import { formatCents } from '@/lib/money'
 import { MapPin, Home as HomeIcon } from 'lucide-react'
 
@@ -65,36 +66,7 @@ export default function ListingsPage() {
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#1E293B] flex flex-col font-sans">
       {/* Top Navigation */}
-      <header className="w-full max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 group">
-          <div className="flex items-center -space-x-1">
-            <span className="w-4 h-4 rounded-t-full bg-[#F26B5B] inline-block" />
-            <span className="w-4 h-4 rounded-t-full bg-[#0E4D5C] inline-block" />
-            <span className="w-4 h-4 rounded-t-full bg-[#F4A261] inline-block" />
-          </div>
-          <span className="text-2xl font-extrabold tracking-tight text-[#F26B5B]">
-            Blockparty
-          </span>
-        </Link>
-
-        <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-[#1E293B]">
-          <Link href="/listings" className="text-[#F26B5B] transition">
-            Browse Local
-          </Link>
-          <Link href="/listings?type=auction" className="hover:text-[#F26B5B] transition">
-            Active Auctions
-          </Link>
-          <Link href="/#how-it-works" className="hover:text-[#F26B5B] transition">
-            How It Works
-          </Link>
-          <Link
-            href="/signup"
-            className="px-4 py-2 rounded-full border-2 border-[#0E4D5C] text-[#0E4D5C] hover:bg-[#0E4D5C] hover:text-white transition"
-          >
-            Sign In / Join
-          </Link>
-        </nav>
-      </header>
+      <SiteHeader active="browse" />
 
       {/* Main Container */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8">

@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { DEFAULT_HUB, HUBS } from '@/lib/hubs'
+import { SiteHeader } from '@/components/SiteHeader'
 
 export default function ProfilePage() {
   const [fullName, setFullName] = useState('')
@@ -68,6 +69,8 @@ export default function ProfilePage() {
   if (loading) return <div className="p-8 text-center">Loading profile...</div>
 
   return (
+    <div className="min-h-screen bg-[#FAF8F5] text-[#1E293B]">
+    <SiteHeader />
     <div className="max-w-xl mx-auto px-4 py-12">
       <div className="bg-white border rounded-xl p-8 shadow-sm">
         <h1 className="text-2xl font-bold mb-6">Profile Settings</h1>
@@ -123,6 +126,7 @@ export default function ProfilePage() {
           </button>
         </form>
       </div>
+    </div>
     </div>
   )
 }

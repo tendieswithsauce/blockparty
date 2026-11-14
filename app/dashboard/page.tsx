@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { PlusCircle } from 'lucide-react'
 import { DEFAULT_HUB, HUBS } from '@/lib/hubs'
 import { dollarsToCents } from '@/lib/money'
+import { SiteHeader } from '@/components/SiteHeader'
 
 const AUCTION_DURATIONS_DAYS = [1, 3, 5, 7] as const
 
@@ -71,6 +72,8 @@ export default function DashboardPage() {
   }
 
   return (
+    <div className="min-h-screen bg-[#FAF8F5] text-[#1E293B]">
+    <SiteHeader />
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Seller Dashboard</h1>
@@ -190,6 +193,7 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+    </div>
     </div>
   )
 }
