@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { DEFAULT_HUB, HUBS } from '@/lib/hubs'
 import { SiteHeader } from '@/components/SiteHeader'
+import { PaymentMethodSection } from '@/components/payments/PaymentMethodSection'
 
 export default function ProfilePage() {
   const [fullName, setFullName] = useState('')
@@ -126,6 +127,8 @@ export default function ProfilePage() {
           </button>
         </form>
       </div>
+
+      <PaymentMethodSection />
     </div>
     </div>
   )
