@@ -91,6 +91,12 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
   // Email confirmation turned off in Supabase: the user is signed in already.
   if (data.session) redirect('/profile')
 
+  // Supabase answers a sign-up for an email that already has an account with a
+  // fake success (a user with no identities) and sends no email.
+  if (data.user && data.user.identities?.length === 0) {
+    return { error: 'An account with this email already exists. Sign in, or reset your password if you forgot it.' }
+  }
+
   return {
     message: `Almost there! We sent a confirmation link to ${email}. Open it to activate your account.`,
   }
