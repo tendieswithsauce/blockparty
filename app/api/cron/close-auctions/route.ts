@@ -1,8 +1,9 @@
 // app/api/cron/close-auctions/route.ts
 // Called every minute by Supabase pg_cron (only when there's work). Closes
 // ended auctions by holding the winner's card for their bid, moving on to the
-// next-highest bidder if a card fails, and releases Buy Now reservations
-// whose 3D Secure check was abandoned.
+// next-highest bidder if a card fails; releases Buy Now reservations whose
+// 3D Secure check was abandoned; and cancels orders whose meetup deadline
+// passed without a handoff (the buyer's hold is released, nobody is charged).
 // Protected by CRON_SECRET (same value as cron_secret in Supabase Vault).
 import { timingSafeEqual } from 'node:crypto'
 import { NextResponse, type NextRequest } from 'next/server'
@@ -44,7 +45,18 @@ export async function POST(req: NextRequest) {
     if (s.payment_intent_id) await stripe.paymentIntents.cancel(s.payment_intent_id).catch(() => {})
   }
 
-  // 2. Auctions that have ended, plus any whose closing was interrupted.
+  // 2. Orders whose meetup deadline passed without a handoff: release the hold.
+  const { data: expired } = await admin.rpc('expired_orders')
+  for (const transactionId of expired ?? []) {
+    const { data: paymentIntentId } = await admin.rpc('cancel_order', {
+      p_transaction_id: transactionId,
+      p_user_id: null,
+      p_reason: 'no_meetup',
+    })
+    if (paymentIntentId) await stripe.paymentIntents.cancel(paymentIntentId).catch(() => {})
+  }
+
+  // 3. Auctions that have ended, plus any whose closing was interrupted.
   const [{ data: ended }, { data: interrupted }] = await Promise.all([
     admin
       .from('listings')
@@ -68,7 +80,7 @@ export async function POST(req: NextRequest) {
     outcomes.push(await closeAuction(id))
   }
 
-  return NextResponse.json({ released: stale?.length ?? 0, auctions: outcomes })
+  return NextResponse.json({ released: stale?.length ?? 0, expired: expired?.length ?? 0, auctions: outcomes })
 }
 
 async function closeAuction(listingId: number): Promise<Outcome> {

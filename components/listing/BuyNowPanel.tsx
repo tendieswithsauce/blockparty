@@ -14,7 +14,7 @@ import { BUY_NOW_CANCEL_WINDOW_SECONDS } from '@/lib/purchase-rules'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { buyNow, cancelPurchase, confirmPurchase } from '@/app/purchases/actions'
 
-type ListingInfo = { id: number; title: string; sellerId: string; status: string; priceCents: number; hubName: string }
+type ListingInfo = { id: number; title: string; sellerId: string; status: string; priceCents: number }
 
 /** The viewer's purchase of this listing, and until when they can undo it. */
 type Purchase = { id: number; cancelUntil: number | null }
@@ -141,8 +141,8 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
           <div className="flex items-start gap-2 p-4 rounded-xl bg-green-50 text-green-800 text-sm">
             <CheckCircle2 className="w-5 h-5 shrink-0" />
             <p>
-              <span className="font-semibold">It&apos;s yours!</span> We&apos;ve placed a hold of {price} on your card. You&apos;ll
-              be charged when you pick it up at {listing.hubName}. We&apos;ll email you when it&apos;s ready.
+              <span className="font-semibold">It&apos;s yours!</span> We&apos;ve placed a hold of {price} on your card. The seller will
+              suggest a safe meetup spot and times. You&apos;re only charged once you&apos;ve checked the item.
             </p>
           </div>
           {error && <div className="p-3 rounded-xl text-sm bg-red-50 text-red-700">{error}</div>}
@@ -161,10 +161,10 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
             </div>
           )}
           <Link
-            href="/dashboard"
+            href={`/orders/${purchase.id}`}
             className="block text-center w-full py-3 rounded-full border-2 border-[#0E4D5C] text-[#0E4D5C] font-bold hover:bg-[#0E4D5C]/5"
           >
-            View in your dashboard
+            View order &amp; meetup
           </Link>
         </div>
       ) : userId === undefined ? (
@@ -182,7 +182,7 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
         <p className="text-sm text-slate-600 bg-slate-50 rounded-xl p-3">This is your listing, so you can&apos;t buy it.</p>
       ) : !hasCard ? (
         <div className="space-y-3">
-          <p className="text-sm text-slate-600">Add a payment method to buy. Your card is only charged at pickup.</p>
+          <p className="text-sm text-slate-600">Add a payment method to buy. Your card is only charged once you&apos;ve met the seller and accepted the item.</p>
           <Link
             href="/profile#payment-method"
             className="flex items-center justify-center gap-2 w-full py-3 rounded-full bg-[#0E4D5C] text-white font-bold hover:bg-[#0b3f4b]"
@@ -220,8 +220,8 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
           }}
         >
           <p>
-            Blockparty will place a hold of <strong>{price}</strong> on your saved card now and charge it when you pick up the
-            item at <strong>{listing.hubName}</strong>.
+            Blockparty will place a hold of <strong>{price}</strong> on your saved card now. You&apos;ll meet the seller at a safe
+            public spot, and your card is only charged once you&apos;ve checked the item and accepted it.
           </p>
           <p>
             You can cancel within {BUY_NOW_CANCEL_WINDOW_SECONDS / 60} minutes if you change your mind. After that the

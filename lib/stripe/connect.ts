@@ -56,7 +56,7 @@ export async function ensureConnectedAccount(user: CurrentUser): Promise<string>
         profile: {
           business_url: 'https://blockpartymarketplace.com',
           product_description:
-            'Individual selling personal, second-hand items to neighbours through Blockparty, a local Edmonton marketplace. Buyers pay Blockparty and pick up at an exchange hub. Items are $1,000 or less.',
+            'Individual selling personal, second-hand items to neighbours through Blockparty, a local marketplace in Canada. Buyers pay Blockparty and the seller is paid when the buyer accepts the item at an in-person meetup. Items are $1,000 or less.',
         },
       },
       configuration: {

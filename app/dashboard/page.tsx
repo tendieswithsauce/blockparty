@@ -16,7 +16,8 @@ import {
   Tag,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { hubName } from '@/lib/hubs'
+import { areaLabel } from '@/lib/areas'
+import { formatMeetupTime } from '@/lib/orders'
 import { formatCents } from '@/lib/money'
 import { SiteHeader } from '@/components/SiteHeader'
 import { CreateListingModal } from '@/components/dashboard/CreateListingModal'
@@ -44,22 +45,30 @@ type MyBid = {
   listing: { id: number; title: string; current_bid_cents: number | null; ends_at: string | null; status: string } | null
 }
 
-type MyPurchase = {
+type MyOrder = {
   id: number
   amount_cents: number
+  platform_fee_cents: number
   status: string
   created_at: string
   listing_id: number
-  listing: { title: string; location_hub: string } | null
+  proposed_times: string[] | null
+  meetup_at: string | null
+  listing: { title: string; area: { name: string; city: string; timezone: string } | null } | null
 }
+
+const ORDER_COLUMNS =
+  'id, amount_cents, platform_fee_cents, status, created_at, listing_id, proposed_times, meetup_at, listing:listings(title, area:areas(name, city, timezone))'
 
 type DashboardData = {
   firstName: string
-  preferredHub: string | null
+  areaId: string | null
+  area: { name: string; city: string } | null
   hasCard: boolean
   listings: MyListing[]
   bids: MyBid[]
-  purchases: MyPurchase[]
+  purchases: MyOrder[]
+  sales: MyOrder[]
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -70,9 +79,8 @@ const STATUS_LABELS: Record<string, string> = {
   inactive: 'Inactive',
   incomplete: 'Draft',
   pending: 'Pending',
-  authorized: 'Card on hold',
-  dropped_off: 'At hub',
-  completed: 'Picked up',
+  authorized: 'Arranging meetup',
+  completed: 'Done',
   canceled: 'Canceled',
   refunded: 'Refunded',
 }
@@ -99,8 +107,8 @@ export default function DashboardPage() {
       return
     }
 
-    const [profileRes, listingsRes, bidsRes, purchasesRes] = await Promise.all([
-      supabase.from('profiles').select('full_name, preferred_hub, stripe_payment_method_id').eq('id', user.id).single(),
+    const [profileRes, listingsRes, bidsRes, purchasesRes, salesRes] = await Promise.all([
+      supabase.from('profiles').select('full_name, area_id, stripe_payment_method_id, area:areas(name, city)').eq('id', user.id).single(),
       supabase
         .from('listings')
         .select('id, title, listing_type, status, image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at')
@@ -114,9 +122,16 @@ export default function DashboardPage() {
         .limit(20),
       supabase
         .from('transactions')
-        .select('id, amount_cents, status, created_at, listing_id, listing:listings(title, location_hub)')
+        .select(ORDER_COLUMNS)
         .eq('buyer_id', user.id)
-        .in('status', ['authorized', 'dropped_off', 'completed', 'refunded'])
+        .in('status', ['authorized', 'completed', 'refunded'])
+        .order('created_at', { ascending: false })
+        .limit(20),
+      supabase
+        .from('transactions')
+        .select(ORDER_COLUMNS)
+        .eq('seller_id', user.id)
+        .in('status', ['authorized', 'completed', 'refunded'])
         .order('created_at', { ascending: false })
         .limit(20),
     ])
@@ -124,11 +139,13 @@ export default function DashboardPage() {
     const profile = profileRes.data
     setData({
       firstName: profile?.full_name?.split(' ')[0] ?? '',
-      preferredHub: profile?.preferred_hub ?? null,
+      areaId: profile?.area_id ?? null,
+      area: (profile?.area as { name: string; city: string } | null) ?? null,
       hasCard: Boolean(profile?.stripe_payment_method_id),
       listings: (listingsRes.data ?? []) as MyListing[],
       bids: (bidsRes.data ?? []) as unknown as MyBid[],
-      purchases: (purchasesRes.data ?? []) as unknown as MyPurchase[],
+      purchases: (purchasesRes.data ?? []) as unknown as MyOrder[],
+      sales: (salesRes.data ?? []) as unknown as MyOrder[],
     })
   }, [])
 
@@ -214,13 +231,15 @@ export default function DashboardPage() {
       action: <SetUpPayoutsButton label={payouts?.accountId ? 'Finish payout setup' : 'Set up payouts'} />,
     },
     {
-      done: Boolean(data?.preferredHub),
+      done: Boolean(data?.area),
       icon: MapPin,
-      title: 'Pick your exchange hub',
-      body: data?.preferredHub ? `Your default hub is ${hubName(data.preferredHub)}.` : 'Where you usually drop off and pick up items.',
+      title: 'Set your area',
+      body: data?.area
+        ? `You're in ${areaLabel(data.area)}.`
+        : 'So we can suggest meetup spots that are fair to you and the other person.',
       action: (
         <Link href="/profile" className="px-4 py-2 rounded-full border-2 border-[#0E4D5C] text-[#0E4D5C] text-sm font-semibold hover:bg-[#0E4D5C]/5">
-          Choose hub
+          Choose area
         </Link>
       ),
     },
@@ -323,7 +342,7 @@ export default function DashboardPage() {
         {payoutsReady && (
           <div className="flex items-center justify-between bg-white border rounded-2xl px-6 py-4 shadow-sm">
             <span className="flex items-center gap-2 text-sm">
-              <Landmark className="w-4 h-4 text-green-600" /> Payouts are active. Earnings are sent to your bank after pickup.
+              <Landmark className="w-4 h-4 text-green-600" /> Payouts are active. Earnings are sent to your bank as soon as the buyer accepts the item.
             </span>
             <PayoutDashboardButton />
           </div>
@@ -338,7 +357,7 @@ export default function DashboardPage() {
             <EmptyState
               icon={Tag}
               title="Nothing listed yet"
-              body="Turn the stuff you don't need into cash. Neighbours pick it up at your exchange hub, and you get paid once they do."
+              body="Turn the stuff you don't need into cash. You meet buyers at a safe public spot and get paid the moment they accept the item."
               action={
                 <button onClick={onCreateClick} className="px-4 py-2 rounded-full bg-[#F26B5B] text-white text-sm font-semibold hover:bg-[#e05a4a]">
                   List your first item
@@ -381,6 +400,18 @@ export default function DashboardPage() {
           )}
         </section>
 
+        {/* Sales */}
+        {data && data.sales.length > 0 && (
+          <section className="bg-white border rounded-2xl p-6 shadow-sm">
+            <h2 className="text-lg font-bold mb-4">Your sales</h2>
+            <ul className="divide-y">
+              {data.sales.map((s) => (
+                <OrderRow key={s.id} order={s} role="seller" />
+              ))}
+            </ul>
+          </section>
+        )}
+
         <div className="grid md:grid-cols-2 gap-8">
           {/* Bids */}
           <section className="bg-white border rounded-2xl p-6 shadow-sm">
@@ -422,24 +453,13 @@ export default function DashboardPage() {
               <EmptyState
                 icon={ShoppingBag}
                 title="No purchases yet"
-                body="When you buy something, your payment is held safely until you pick it up at the hub."
+                body="When you buy something, your card is only charged once you've met the seller and accepted the item."
                 action={<BrowseLink />}
               />
             ) : (
               <ul className="divide-y">
                 {data.purchases.map((p) => (
-                  <li key={p.id} className="py-3 flex justify-between gap-4 text-sm">
-                    <span className="min-w-0">
-                      <Link href={`/listings/${p.listing_id}`} className="font-medium line-clamp-1 hover:text-[#F26B5B]">
-                        {p.listing?.title ?? `Order #${p.id}`}
-                      </Link>
-                      {p.listing && <span className="text-xs text-slate-500">Pickup at {hubName(p.listing.location_hub)}</span>}
-                    </span>
-                    <span className="shrink-0 text-right">
-                      {formatCents(p.amount_cents)}
-                      <span className="block text-xs font-semibold text-[#0E4D5C]">{STATUS_LABELS[p.status] ?? p.status}</span>
-                    </span>
-                  </li>
+                  <OrderRow key={p.id} order={p} role="buyer" />
                 ))}
               </ul>
             )}
@@ -468,7 +488,7 @@ export default function DashboardPage() {
 
       {showModal && (
         <CreateListingModal
-          defaultHub={data?.preferredHub ?? undefined}
+          defaultArea={data?.areaId ?? undefined}
           onClose={() => setShowModal(false)}
           onCreated={() => {
             setShowModal(false)
@@ -478,6 +498,36 @@ export default function DashboardPage() {
         />
       )}
     </div>
+  )
+}
+
+/** One order in the dashboard, with what happens next. */
+function OrderRow({ order, role }: { order: MyOrder; role: 'buyer' | 'seller' }) {
+  const tz = order.listing?.area?.timezone ?? 'America/Edmonton'
+  let next: { text: string; action: boolean }
+  if (order.status === 'completed') next = { text: role === 'seller' ? 'Paid' : 'Done', action: false }
+  else if (order.status !== 'authorized') next = { text: STATUS_LABELS[order.status] ?? order.status, action: false }
+  else if (order.meetup_at) next = { text: `Meetup ${formatMeetupTime(order.meetup_at, tz)}`, action: false }
+  else if (order.proposed_times?.length)
+    next = role === 'buyer' ? { text: 'Pick a meetup time', action: true } : { text: 'Waiting for buyer', action: false }
+  else next = role === 'seller' ? { text: 'Suggest a meetup', action: true } : { text: 'Waiting for seller', action: false }
+
+  return (
+    <li>
+      <Link href={`/orders/${order.id}`} className="py-3 flex justify-between gap-4 text-sm hover:bg-slate-50 -mx-2 px-2 rounded-lg">
+        <span className="min-w-0">
+          <span className="font-medium line-clamp-1">{order.listing?.title ?? `Order #${order.id}`}</span>
+          <span className="text-xs text-slate-500">{areaLabel(order.listing?.area)}</span>
+        </span>
+        <span className="shrink-0 text-right">
+          {formatCents(role === 'seller' ? order.amount_cents - order.platform_fee_cents : order.amount_cents)}
+          <span className={`block text-xs font-semibold ${next.action ? 'text-[#F26B5B]' : 'text-[#0E4D5C]'}`}>
+            {next.action && '● '}
+            {next.text}
+          </span>
+        </span>
+      </Link>
+    </li>
   )
 }
 

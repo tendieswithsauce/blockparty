@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     template: "%s · Blockparty",
   },
   description:
-    "Bid, buy and sell safely with neighbors. Escrow-protected payments and local exchange hubs.",
+    "Bid, buy and sell safely with neighbors. Pay only when you accept the item, and meet at safe public spots.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

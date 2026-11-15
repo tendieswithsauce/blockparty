@@ -1,5 +1,5 @@
 // app/listings/[id]/page.tsx
-// Listing detail: photos, price, hub, description, and the bid / buy panel.
+// Listing detail: photos, price, seller's area, description, and the bid / buy panel.
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -7,7 +7,7 @@ import { connection } from 'next/server'
 import { ArrowLeft, MapPin, ShieldCheck, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { hubName } from '@/lib/hubs'
+import { areaLabel } from '@/lib/areas'
 import { SiteHeader } from '@/components/SiteHeader'
 import { PhotoGallery } from '@/components/listing/PhotoGallery'
 import { BidPanel } from '@/components/listing/BidPanel'
@@ -42,7 +42,7 @@ async function ListingContent({ id }: { id: string }) {
   const { data: listing } = await supabase
     .from('listings')
     .select(
-      'id, seller_id, title, description, listing_type, status, location_hub, image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, created_at',
+      'id, seller_id, title, description, listing_type, status, area:areas(name, city), image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, created_at',
     )
     .eq('id', listingId)
     .maybeSingle()
@@ -78,7 +78,7 @@ async function ListingContent({ id }: { id: string }) {
           </span>
           <h1 className="text-3xl font-extrabold tracking-tight mt-3">{listing.title}</h1>
           <p className="flex items-center gap-1 text-sm text-slate-500 mt-2">
-            <MapPin className="w-4 h-4 text-[#F26B5B]" /> Pickup at {hubName(listing.location_hub)}
+            <MapPin className="w-4 h-4 text-[#F26B5B]" /> Seller in {areaLabel(listing.area)}
           </p>
         </div>
 
@@ -103,7 +103,6 @@ async function ListingContent({ id }: { id: string }) {
               sellerId: listing.seller_id,
               status: listing.status,
               priceCents: listing.buy_now_price_cents ?? 0,
-              hubName: hubName(listing.location_hub),
             }}
           />
         )}
@@ -111,7 +110,7 @@ async function ListingContent({ id }: { id: string }) {
         <div className="flex items-start gap-3 bg-[#0E4D5C]/5 rounded-2xl p-4 text-sm">
           <ShieldCheck className="w-5 h-5 text-[#0E4D5C] shrink-0 mt-0.5" />
           <p className="text-slate-600">
-            Your payment is held by Blockparty and only released to the seller once you pick the item up at the hub.
+            You meet the seller at a safe public spot, like a police exchange zone. Your card is only charged once you&apos;ve checked the item and handed over your code.
           </p>
         </div>
 

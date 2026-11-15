@@ -55,6 +55,7 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
   const [hasCard, setHasCard] = useState(false)
   // Set when the viewer won this auction and their card hold went through.
   const [wonCents, setWonCents] = useState<number | null>(null)
+  const [wonOrderId, setWonOrderId] = useState<number | null>(null)
   // Set in the browser only: the clock isn't available while prerendering.
   const [now, setNow] = useState<number | null>(null)
   const [amount, setAmount] = useState('')
@@ -106,7 +107,7 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
           supabase.from('profiles').select('stripe_payment_method_id').eq('id', uid).single(),
           supabase
             .from('transactions')
-            .select('amount_cents')
+            .select('id, amount_cents')
             .eq('listing_id', listing.id)
             .eq('buyer_id', uid)
             .in('status', ['authorized', 'dropped_off', 'completed'])
@@ -115,6 +116,7 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
         if (cancelled) return
         setHasCard(Boolean(profile?.stripe_payment_method_id))
         setWonCents(win?.amount_cents ?? null)
+        setWonOrderId(win?.id ?? null)
       }
     }
     loadBids()
@@ -244,7 +246,12 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
           <Trophy className="w-5 h-5 shrink-0" />
           <p>
             <span className="font-semibold">You won!</span> We&apos;ve placed a hold of {formatCents(wonCents)} on your card.
-            You&apos;ll be charged when you pick it up at the hub. We&apos;ll email you when it&apos;s ready.
+            The seller will suggest a safe meetup spot and times. You&apos;re only charged once you&apos;ve checked the item.{' '}
+            {wonOrderId && (
+              <Link href={`/orders/${wonOrderId}`} className="font-semibold underline">
+                View order &amp; meetup
+              </Link>
+            )}
           </p>
         </div>
       ) : ended ? (
@@ -335,8 +342,8 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
             You&apos;re bidding <strong>{formatCents(pendingCents)}</strong> on <strong>{listing.title}</strong>.
           </p>
           <p>
-            If you win, Blockparty will charge your saved card for your bid and hold the money until you pick up the item at
-            the hub. <strong>Bids can&apos;t be withdrawn.</strong>
+            If you win, Blockparty will place a hold on your saved card for your bid. You&apos;ll meet the seller at a safe public
+            spot, and your card is only charged once you&apos;ve checked the item. <strong>Bids can&apos;t be withdrawn.</strong>
           </p>
         </ConfirmDialog>
       )}

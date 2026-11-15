@@ -1,7 +1,7 @@
 // app/purchases/actions.ts
 // Buy Now: reserve the listing, then put a hold on the buyer's saved card for
 // the price (a PaymentIntent with manual capture). The hold is captured at the
-// pickup handoff; nothing is charged yet.
+// in-person handoff (app/orders/actions.ts); nothing is charged yet.
 'use server'
 
 import Stripe from 'stripe'

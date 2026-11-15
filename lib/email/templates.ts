@@ -30,7 +30,7 @@ function layout({ heading, body, cta }: { heading: string; body: string; cta?: {
   ${button}
 </td></tr>
 <tr><td align="center" style="padding-top:24px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#94A3B8;">
-  Blockparty &middot; Buy, sell and bid locally in Edmonton<br>Payments held safely until pickup at your exchange hub.
+  Blockparty &middot; Buy, sell and bid with your neighbours<br>Meet at a safe public spot. Pay only when you accept the item.
 </td></tr>
 </table></td></tr></table></body></html>`
 }
@@ -45,8 +45,8 @@ export function welcomeEmail({ firstName, siteUrl }: { firstName: string | null;
     html: layout({
       heading: hi,
       body:
-        p("Your account is confirmed. Blockparty is Edmonton's neighbourhood marketplace: buy, bid and sell with people nearby, and swap items at a local exchange hub.") +
-        p('<strong>To buy or bid:</strong> add a payment method. Your card is only charged when you win or use Buy Now, and the money is held until you pick up.') +
+        p("Your account is confirmed. Blockparty is your neighbourhood marketplace: buy, bid and sell with people nearby, meet at a safe public spot, and only pay once you've checked the item.") +
+        p('<strong>To buy or bid:</strong> add a payment method. When you win or use Buy Now we hold the amount on your card, and only charge it once you&rsquo;ve met the seller and accepted the item.') +
         p('<strong>To sell:</strong> set up payouts with Stripe, then list your first item in a couple of minutes.'),
       cta: { label: 'Go to my dashboard', url: `${siteUrl}/dashboard` },
     }),

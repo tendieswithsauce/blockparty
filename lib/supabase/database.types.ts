@@ -9,6 +9,32 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+type TransactionRow = {
+  amount_cents: number
+  authorized_at: string | null
+  buyer_id: string
+  cancel_reason: string | null
+  canceled_at: string | null
+  canceled_by: string | null
+  created_at: string
+  handoff_attempts: number
+  handoff_code: string | null
+  id: number
+  listing_id: number
+  meetup_at: string | null
+  meetup_deadline: string | null
+  meetup_spot_id: string | null
+  picked_up_at: string | null
+  platform_fee_cents: number
+  proposed_times: string[] | null
+  seller_id: string
+  status: Database["public"]["Enums"]["transaction_status"]
+  stripe_checkout_session_id: string | null
+  stripe_payment_intent_id: string | null
+  stripe_transfer_id: string | null
+  updated_at: string
+}
+
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
@@ -17,6 +43,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      areas: {
+        Row: {
+          city: string
+          country: string
+          id: string
+          is_active: boolean
+          lat: number
+          lng: number
+          name: string
+          region: string
+          sort_order: number
+          timezone: string
+        }
+        Insert: {
+          city: string
+          country: string
+          id: string
+          is_active?: boolean
+          lat: number
+          lng: number
+          name: string
+          region: string
+          sort_order?: number
+          timezone: string
+        }
+        Update: {
+          city?: string
+          country?: string
+          id?: string
+          is_active?: boolean
+          lat?: number
+          lng?: number
+          name?: string
+          region?: string
+          sort_order?: number
+          timezone?: string
+        }
+        Relationships: []
+      }
       bids: {
         Row: {
           amount_cents: number
@@ -56,35 +121,9 @@ export type Database = {
           },
         ]
       }
-      hubs: {
-        Row: {
-          address: string | null
-          city: string
-          created_at: string
-          id: string
-          is_active: boolean
-          name: string
-        }
-        Insert: {
-          address?: string | null
-          city: string
-          created_at?: string
-          id: string
-          is_active?: boolean
-          name: string
-        }
-        Update: {
-          address?: string | null
-          city?: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          name?: string
-        }
-        Relationships: []
-      }
       listings: {
         Row: {
+          area_id: string
           bid_count: number
           buy_now_price_cents: number | null
           created_at: string
@@ -94,7 +133,6 @@ export type Database = {
           id: number
           image_paths: string[]
           listing_type: Database["public"]["Enums"]["listing_type"]
-          location_hub: string
           seller_id: string
           starting_price_cents: number | null
           status: Database["public"]["Enums"]["listing_status"]
@@ -103,6 +141,7 @@ export type Database = {
           winning_bid_id: number | null
         }
         Insert: {
+          area_id: string
           bid_count?: number
           buy_now_price_cents?: number | null
           created_at?: string
@@ -112,7 +151,6 @@ export type Database = {
           id?: number
           image_paths?: string[]
           listing_type: Database["public"]["Enums"]["listing_type"]
-          location_hub: string
           seller_id: string
           starting_price_cents?: number | null
           status?: Database["public"]["Enums"]["listing_status"]
@@ -121,6 +159,7 @@ export type Database = {
           winning_bid_id?: number | null
         }
         Update: {
+          area_id?: string
           bid_count?: number
           buy_now_price_cents?: number | null
           created_at?: string
@@ -130,7 +169,6 @@ export type Database = {
           id?: number
           image_paths?: string[]
           listing_type?: Database["public"]["Enums"]["listing_type"]
-          location_hub?: string
           seller_id?: string
           starting_price_cents?: number | null
           status?: Database["public"]["Enums"]["listing_status"]
@@ -140,10 +178,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "listings_location_hub_fkey"
-            columns: ["location_hub"]
+            foreignKeyName: "listings_area_id_fkey"
+            columns: ["area_id"]
             isOneToOne: false
-            referencedRelation: "hubs"
+            referencedRelation: "areas"
             referencedColumns: ["id"]
           },
           {
@@ -162,15 +200,60 @@ export type Database = {
           },
         ]
       }
+      meetup_spots: {
+        Row: {
+          address: string
+          city: string
+          country: string
+          id: string
+          is_active: boolean
+          kind: string
+          lat: number
+          lng: number
+          name: string
+          notes: string | null
+          region: string
+          timezone: string
+        }
+        Insert: {
+          address: string
+          city: string
+          country: string
+          id: string
+          is_active?: boolean
+          kind: string
+          lat: number
+          lng: number
+          name: string
+          notes?: string | null
+          region: string
+          timezone: string
+        }
+        Update: {
+          address?: string
+          city?: string
+          country?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          lat?: number
+          lng?: number
+          name?: string
+          notes?: string | null
+          region?: string
+          timezone?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           address: Json | null
+          area_id: string | null
           created_at: string
           email: string | null
           full_name: string | null
           id: string
           phone: string | null
-          preferred_hub: string | null
           stripe_account_id: string | null
           stripe_charges_enabled: boolean
           stripe_customer_id: string | null
@@ -182,12 +265,12 @@ export type Database = {
         }
         Insert: {
           address?: Json | null
+          area_id?: string | null
           created_at?: string
           email?: string | null
           full_name?: string | null
           id: string
           phone?: string | null
-          preferred_hub?: string | null
           stripe_account_id?: string | null
           stripe_charges_enabled?: boolean
           stripe_customer_id?: string | null
@@ -199,12 +282,12 @@ export type Database = {
         }
         Update: {
           address?: Json | null
+          area_id?: string | null
           created_at?: string
           email?: string | null
           full_name?: string | null
           id?: string
           phone?: string | null
-          preferred_hub?: string | null
           stripe_account_id?: string | null
           stripe_charges_enabled?: boolean
           stripe_customer_id?: string | null
@@ -216,72 +299,42 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "profiles_preferred_hub_fkey"
-            columns: ["preferred_hub"]
+            foreignKeyName: "profiles_area_id_fkey"
+            columns: ["area_id"]
             isOneToOne: false
-            referencedRelation: "hubs"
+            referencedRelation: "areas"
             referencedColumns: ["id"]
           },
         ]
       }
       transactions: {
-        Row: {
-          amount_cents: number
-          authorized_at: string | null
-          buyer_id: string
-          canceled_at: string | null
-          created_at: string
-          dropoff_code: string | null
-          dropped_off_at: string | null
-          id: number
-          listing_id: number
-          picked_up_at: string | null
-          pickup_code: string | null
-          platform_fee_cents: number
-          seller_id: string
-          status: Database["public"]["Enums"]["transaction_status"]
-          stripe_checkout_session_id: string | null
-          stripe_payment_intent_id: string | null
-          updated_at: string
-        }
+        Row: TransactionRow
         Insert: {
           amount_cents: number
           authorized_at?: string | null
           buyer_id: string
+          cancel_reason?: string | null
           canceled_at?: string | null
+          canceled_by?: string | null
           created_at?: string
-          dropoff_code?: string | null
-          dropped_off_at?: string | null
+          handoff_attempts?: number
+          handoff_code?: string | null
           id?: number
           listing_id: number
+          meetup_at?: string | null
+          meetup_deadline?: string | null
+          meetup_spot_id?: string | null
           picked_up_at?: string | null
-          pickup_code?: string | null
           platform_fee_cents?: number
+          proposed_times?: string[] | null
           seller_id: string
           status?: Database["public"]["Enums"]["transaction_status"]
           stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
+          stripe_transfer_id?: string | null
           updated_at?: string
         }
-        Update: {
-          amount_cents?: number
-          authorized_at?: string | null
-          buyer_id?: string
-          canceled_at?: string | null
-          created_at?: string
-          dropoff_code?: string | null
-          dropped_off_at?: string | null
-          id?: number
-          listing_id?: number
-          picked_up_at?: string | null
-          pickup_code?: string | null
-          platform_fee_cents?: number
-          seller_id?: string
-          status?: Database["public"]["Enums"]["transaction_status"]
-          stripe_checkout_session_id?: string | null
-          stripe_payment_intent_id?: string | null
-          updated_at?: string
-        }
+        Update: Partial<TransactionRow>
         Relationships: [
           {
             foreignKeyName: "transactions_buyer_id_fkey"
@@ -291,10 +344,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "transactions_canceled_by_fkey"
+            columns: ["canceled_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "transactions_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_meetup_spot_id_fkey"
+            columns: ["meetup_spot_id"]
+            isOneToOne: false
+            referencedRelation: "meetup_spots"
             referencedColumns: ["id"]
           },
           {
@@ -311,27 +378,69 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      auction_work_pending: { Args: never; Returns: boolean }
       begin_purchase: {
         Args: { p_buyer_id: string; p_fee_bps: number; p_listing_id: number }
-        Returns: Database["public"]["Tables"]["transactions"]["Row"]
+        Returns: TransactionRow
+        SetofOptions: {
+          from: "*"
+          to: "transactions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       cancel_authorized_purchase: {
-        Args: { p_buyer_id: string; p_transaction_id: number; p_window_seconds: number }
+        Args: {
+          p_buyer_id: string
+          p_transaction_id: number
+          p_window_seconds: number
+        }
         Returns: string
       }
-      close_auction: {
-        Args: { p_fee_bps: number; p_listing_id: number }
-        Returns: Database["public"]["Tables"]["transactions"]["Row"]
-      }
-      release_stale_purchases: {
-        Args: never
-        Returns: { payment_intent_id: string | null; transaction_id: number }[]
+      cancel_order: {
+        Args: { p_reason: string; p_transaction_id: number; p_user_id: string | null }
+        Returns: string
       }
       cancel_pending_purchase: {
         Args: { p_transaction_id: number }
         Returns: undefined
       }
+      check_handoff_code: {
+        Args: { p_code: string; p_seller_id: string; p_transaction_id: number }
+        Returns: boolean
+      }
+      choose_meetup_time: {
+        Args: { p_time: string | null; p_transaction_id: number }
+        Returns: undefined
+      }
+      close_auction: {
+        Args: { p_fee_bps: number; p_listing_id: number }
+        Returns: TransactionRow
+        SetofOptions: {
+          from: "*"
+          to: "transactions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      complete_order: {
+        Args: { p_transaction_id: number; p_transfer_id: string | null }
+        Returns: undefined
+      }
+      distance_km: {
+        Args: { lat1: number; lat2: number; lng1: number; lng2: number }
+        Returns: number
+      }
+      expired_orders: { Args: never; Returns: number[] }
       get_handoff_code: { Args: { p_transaction_id: number }; Returns: string }
+      listing_photos_ok: { Args: { p_paths: string[] }; Returns: boolean }
+      order_party_names: {
+        Args: { p_transaction_id: number }
+        Returns: {
+          buyer_first_name: string
+          seller_first_name: string
+        }[]
+      }
       place_bid: {
         Args: { p_amount_cents: number; p_listing_id: number }
         Returns: {
@@ -347,6 +456,33 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      propose_meetup: {
+        Args: { p_spot_id: string; p_times: string[]; p_transaction_id: number }
+        Returns: undefined
+      }
+      release_stale_purchases: {
+        Args: never
+        Returns: {
+          payment_intent_id: string | null
+          transaction_id: number
+        }[]
+      }
+      seller_can_receive_payouts: { Args: never; Returns: boolean }
+      suggest_meetup_spots: {
+        Args: { p_limit?: number; p_transaction_id: number }
+        Returns: {
+          address: string
+          buyer_km: number
+          id: string
+          kind: string
+          lat: number
+          lng: number
+          name: string
+          notes: string | null
+          seller_km: number
+          timezone: string
+        }[]
       }
     }
     Enums: {

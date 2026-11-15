@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ImagePlus, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { DEFAULT_HUB, HUBS } from '@/lib/hubs'
+import { AreaSelect } from '@/components/AreaSelect'
 import { MAX_PRICE_CENTS, dollarsToCents, formatCents } from '@/lib/money'
 import { PLATFORM_FEE_LABEL, sellerPayoutCents } from '@/lib/fees'
 
@@ -25,11 +25,11 @@ function extensionFor(file: File) {
 }
 
 export function CreateListingModal({
-  defaultHub,
+  defaultArea,
   onClose,
   onCreated,
 }: {
-  defaultHub?: string
+  defaultArea?: string
   onClose: () => void
   onCreated: () => void
 }) {
@@ -38,7 +38,7 @@ export function CreateListingModal({
   const [price, setPrice] = useState('')
   const [listingType, setListingType] = useState<'fixed' | 'auction'>('fixed')
   const [durationDays, setDurationDays] = useState<number>(3)
-  const [locationHub, setLocationHub] = useState<string>(defaultHub ?? DEFAULT_HUB)
+  const [areaId, setAreaId] = useState<string>(defaultArea ?? '')
   const [photos, setPhotos] = useState<Photo[]>([])
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
@@ -100,6 +100,10 @@ export function CreateListingModal({
       setError('Add at least one photo so buyers can see the item.')
       return
     }
+    if (!areaId) {
+      setError('Choose your area so buyers know roughly where the item is.')
+      return
+    }
 
     setSaving(true)
     const supabase = createClient()
@@ -144,7 +148,7 @@ export function CreateListingModal({
       title: title.trim(),
       description: description.trim() || null,
       listing_type: listingType,
-      location_hub: locationHub,
+      area_id: areaId,
       image_paths: uploaded,
       ...pricing,
     })
@@ -302,14 +306,17 @@ export function CreateListingModal({
           )}
 
           <div>
-            <label htmlFor="listing-hub" className="block text-sm font-medium text-gray-700">Exchange hub</label>
-            <select id="listing-hub" value={locationHub} onChange={(e) => setLocationHub(e.target.value)} className={inputClass}>
-              {HUBS.map((hub) => (
-                <option key={hub.id} value={hub.id}>
-                  {hub.name}
-                </option>
-              ))}
-            </select>
+            <label htmlFor="listing-area" className="block text-sm font-medium text-gray-700">Your area</label>
+            <AreaSelect
+              id="listing-area"
+              value={areaId}
+              onChange={setAreaId}
+              placeholder="Where is the item?"
+              className={inputClass}
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Buyers see the area, not your address. You&apos;ll meet at a public spot that suits you both.
+            </p>
           </div>
 
           <div>

@@ -3,14 +3,14 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { DEFAULT_HUB, HUBS } from '@/lib/hubs'
+import { AreaSelect } from '@/components/AreaSelect'
 import { SiteHeader } from '@/components/SiteHeader'
 import { PaymentMethodSection } from '@/components/payments/PaymentMethodSection'
 
 export default function ProfilePage() {
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
-  const [preferredHub, setPreferredHub] = useState<string>(DEFAULT_HUB)
+  const [areaId, setAreaId] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [statusMsg, setStatusMsg] = useState('')
@@ -23,13 +23,13 @@ export default function ProfilePage() {
         // The profile row is created automatically on sign-up (DB trigger).
         const { data } = await supabase
           .from('profiles')
-          .select('full_name, phone, preferred_hub')
+          .select('full_name, phone, area_id')
           .eq('id', user.id)
           .single()
         if (data) {
           setFullName(data.full_name || '')
           setPhone(data.phone || '')
-          setPreferredHub(data.preferred_hub || DEFAULT_HUB)
+          setAreaId(data.area_id || '')
         }
       }
       setLoading(false)
@@ -55,7 +55,7 @@ export default function ProfilePage() {
       .update({
         full_name: fullName || null,
         phone: phone || null,
-        preferred_hub: preferredHub,
+        area_id: areaId || null,
       })
       .eq('id', user.id)
 
@@ -104,18 +104,17 @@ export default function ProfilePage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Default Exchange Hub</label>
-            <select
-              value={preferredHub}
-              onChange={(e) => setPreferredHub(e.target.value)}
+            <label htmlFor="profile-area" className="block text-sm font-medium text-gray-700">Your area</label>
+            <AreaSelect
+              id="profile-area"
+              value={areaId}
+              onChange={setAreaId}
+              placeholder="Choose the part of the city you're in"
               className="mt-1 w-full border px-3 py-2 rounded-lg focus:ring-2 focus:ring-black focus:outline-none"
-            >
-              {HUBS.map((hub) => (
-                <option key={hub.id} value={hub.id}>
-                  {hub.name}
-                </option>
-              ))}
-            </select>
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Used to suggest meetup spots that are fair to you and the other person. Your exact address is never shared.
+            </p>
           </div>
 
           <button

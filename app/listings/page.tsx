@@ -4,19 +4,20 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { HUBS, hubName } from '@/lib/hubs'
+import { AreaSelect } from '@/components/AreaSelect'
+import { areaLabel, cityKey, type Area } from '@/lib/areas'
 import { SiteHeader } from '@/components/SiteHeader'
 import { formatCents } from '@/lib/money'
 import { MapPin, Home as HomeIcon } from 'lucide-react'
 
 const LISTING_COLUMNS =
-  'id, title, listing_type, location_hub, image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, ends_at'
+  'id, title, listing_type, area:areas(name, city), image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, ends_at'
 
 interface Listing {
   id: number
   title: string
   listing_type: 'fixed' | 'auction'
-  location_hub: string
+  area: { name: string; city: string } | null
   image_paths: string[]
   buy_now_price_cents: number | null
   starting_price_cents: number | null
@@ -24,7 +25,7 @@ interface Listing {
   ends_at: string | null
 }
 
-const ALL_HUBS = 'all'
+const ALL_AREAS = 'all'
 
 function displayPriceCents(item: Listing): number {
   if (item.listing_type === 'auction') {
@@ -35,7 +36,8 @@ function displayPriceCents(item: Listing): number {
 
 export default function ListingsPage() {
   const [listings, setListings] = useState<Listing[]>([])
-  const [selectedLocation, setSelectedLocation] = useState<string>(ALL_HUBS)
+  const [selectedLocation, setSelectedLocation] = useState<string>(ALL_AREAS)
+  const [areas, setAreas] = useState<Area[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
@@ -51,17 +53,20 @@ export default function ListingsPage() {
         .eq('status', 'active')
         .order('created_at', { ascending: false })
 
-      if (selectedLocation !== ALL_HUBS) {
-        query = query.eq('location_hub', selectedLocation)
+      if (selectedLocation.startsWith('city:')) {
+        const ids = areas.filter((a) => cityKey(a) === selectedLocation).map((a) => a.id)
+        query = query.in('area_id', ids)
+      } else if (selectedLocation !== ALL_AREAS) {
+        query = query.eq('area_id', selectedLocation)
       }
 
       const { data } = await query
-      if (data) setListings(data)
+      if (data) setListings(data as unknown as Listing[])
       setLoading(false)
     }
 
     fetchListings()
-  }, [selectedLocation])
+  }, [selectedLocation, areas])
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#1E293B] flex flex-col font-sans">
@@ -86,18 +91,14 @@ export default function ListingsPage() {
 
           <div className="flex items-center gap-2 bg-white px-4 py-2.5 border-2 border-[#0E4D5C]/20 rounded-2xl shadow-sm">
             <MapPin className="w-5 h-5 text-[#F26B5B]" />
-            <select
+            <AreaSelect
               value={selectedLocation}
-              onChange={(e) => setSelectedLocation(e.target.value)}
+              onChange={setSelectedLocation}
+              onLoaded={setAreas}
+              allOption="All areas"
+              cityOptions
               className="bg-transparent focus:outline-none text-sm font-bold text-[#0E4D5C]"
-            >
-              <option value={ALL_HUBS}>All Hubs</option>
-              {HUBS.map((hub) => (
-                <option key={hub.id} value={hub.id}>
-                  {hub.name}
-                </option>
-              ))}
-            </select>
+            />
           </div>
         </div>
 
@@ -113,9 +114,9 @@ export default function ListingsPage() {
             <div className="w-16 h-16 rounded-full bg-[#A8D5BA]/40 text-[#0E4D5C] flex items-center justify-center mx-auto mb-4">
               <MapPin className="w-8 h-8" />
             </div>
-            <h3 className="text-xl font-bold text-slate-800">No active listings in this hub</h3>
+            <h3 className="text-xl font-bold text-slate-800">No active listings here yet</h3>
             <p className="text-slate-500 text-sm mt-1 mb-6">
-              Be the first neighbor to list an item or try selecting &quot;All Hubs&quot;.
+              Be the first neighbor to list an item or try a wider area.
             </p>
             <Link
               href="/signup"
@@ -167,7 +168,7 @@ export default function ListingsPage() {
                     </p>
                     <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
                       <MapPin className="w-3.5 h-3.5 text-[#F26B5B]" />
-                      {hubName(item.location_hub).replace('Edmonton - ', '')}
+                      {item.area?.name ?? areaLabel(null)}
                     </p>
                   </div>
 
