@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ImagePlus, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { DEFAULT_HUB, HUBS } from '@/lib/hubs'
-import { dollarsToCents } from '@/lib/money'
+import { MAX_PRICE_CENTS, dollarsToCents, formatCents } from '@/lib/money'
 
 const AUCTION_DURATIONS_DAYS = [1, 3, 5, 7] as const
 const MAX_PHOTOS = 8
@@ -89,6 +89,10 @@ export function CreateListingModal({
     const priceCents = dollarsToCents(price)
     if (priceCents === null) {
       setError('Enter a valid price greater than $0.')
+      return
+    }
+    if (priceCents > MAX_PRICE_CENTS) {
+      setError(`Blockparty is for items up to ${formatCents(MAX_PRICE_CENTS)}. Lower the price to list it.`)
       return
     }
     if (photos.length === 0) {
@@ -248,11 +252,13 @@ export function CreateListingModal({
                 type="number"
                 step="0.01"
                 min="0.01"
+                max={MAX_PRICE_CENTS / 100}
                 required
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 className={inputClass}
               />
+              <p className="mt-1 text-xs text-gray-500">Up to {formatCents(MAX_PRICE_CENTS)}{listingType === 'auction' ? ', including bids' : ''}.</p>
             </div>
             <div>
               <label htmlFor="listing-format" className="block text-sm font-medium text-gray-700">Format</label>

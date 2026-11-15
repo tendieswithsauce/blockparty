@@ -57,7 +57,7 @@ async function ensureCustomer(user: { id: string; email?: string }) {
       metadata: { supabase_user_id: user.id },
     },
     // Two quick clicks within 24h reuse the same customer instead of making two.
-    { idempotencyKey: `customer-${user.id}` },
+    { idempotencyKey: `customer-${user.id}-${Math.floor(Date.now() / 60_000)}` },
   )
 
   // Only set it if nobody else did in the meantime.

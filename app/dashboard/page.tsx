@@ -85,7 +85,11 @@ export default function DashboardPage() {
   const load = useCallback(async () => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      // Session was revoked (e.g. signed out on another device): start over.
+      window.location.assign('/login?next=/dashboard')
+      return
+    }
 
     const [profileRes, listingsRes, bidsRes, purchasesRes] = await Promise.all([
       supabase.from('profiles').select('full_name, preferred_hub, stripe_payment_method_id').eq('id', user.id).single(),
@@ -135,7 +139,9 @@ export default function DashboardPage() {
       )
     }
     load()
-    getPayoutStatus().then(setPayouts)
+    getPayoutStatus()
+      .then(setPayouts)
+      .catch(() => setPayouts(null))
   }, [load])
 
   const payoutsReady = payouts?.ready === true
