@@ -153,6 +153,7 @@ function SetupForm({
   const stripe = useStripe()
   const elements = useElements()
   const [submitting, setSubmitting] = useState(false)
+  const [ready, setReady] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -180,7 +181,8 @@ function SetupForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <PaymentElement options={{ layout: 'tabs' }} />
+      {!ready && <p className="text-sm text-gray-500">Loading secure card form…</p>}
+      <PaymentElement options={{ layout: 'tabs' }} onReady={() => setReady(true)} />
       <div className="flex gap-3">
         <button
           type="button"
@@ -192,7 +194,7 @@ function SetupForm({
         </button>
         <button
           type="submit"
-          disabled={!stripe || submitting}
+          disabled={!stripe || !ready || submitting}
           className="flex-1 bg-black text-white py-3 rounded-lg font-medium hover:bg-gray-800 transition disabled:opacity-60"
         >
           {submitting ? 'Saving…' : 'Save card'}
