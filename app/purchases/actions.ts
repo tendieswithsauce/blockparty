@@ -8,7 +8,7 @@ import Stripe from 'stripe'
 import { getCurrentUser } from '@/lib/auth/current-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getStripe, stripeConfigured } from '@/lib/stripe/server'
-import { PLATFORM_FEE_BPS } from '@/lib/fees'
+import { MIN_PLATFORM_FEE_CENTS, PLATFORM_FEE_BPS } from '@/lib/fees'
 import { BUY_NOW_CANCEL_WINDOW_SECONDS, CANCEL_GRACE_SECONDS } from '@/lib/purchase-rules'
 import { NoSavedCardError, createHold, markAuthorized } from '@/lib/payments/holds'
 
@@ -32,6 +32,7 @@ export async function buyNow(listingId: number): Promise<BuyResult> {
     p_listing_id: listingId,
     p_buyer_id: user.id,
     p_fee_bps: PLATFORM_FEE_BPS,
+    p_min_fee_cents: MIN_PLATFORM_FEE_CENTS,
   })
   if (reserveError || !txn) {
     // Our own messages from the database (P0001) are written for buyers.

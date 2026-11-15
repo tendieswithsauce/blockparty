@@ -380,7 +380,7 @@ export type Database = {
     Functions: {
       auction_work_pending: { Args: never; Returns: boolean }
       begin_purchase: {
-        Args: { p_buyer_id: string; p_fee_bps: number; p_listing_id: number }
+        Args: { p_buyer_id: string; p_fee_bps: number; p_listing_id: number; p_min_fee_cents?: number }
         Returns: TransactionRow
         SetofOptions: {
           from: "*"
@@ -414,7 +414,7 @@ export type Database = {
         Returns: undefined
       }
       close_auction: {
-        Args: { p_fee_bps: number; p_listing_id: number }
+        Args: { p_fee_bps: number; p_listing_id: number; p_min_fee_cents?: number }
         Returns: TransactionRow
         SetofOptions: {
           from: "*"

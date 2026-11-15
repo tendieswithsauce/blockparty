@@ -10,7 +10,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import Stripe from 'stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getStripe, stripeConfigured } from '@/lib/stripe/server'
-import { PLATFORM_FEE_BPS } from '@/lib/fees'
+import { MIN_PLATFORM_FEE_CENTS, PLATFORM_FEE_BPS } from '@/lib/fees'
 import { NoSavedCardError, createHold, markAuthorized } from '@/lib/payments/holds'
 
 const MAX_AUCTIONS_PER_RUN = 10
@@ -91,6 +91,7 @@ async function closeAuction(listingId: number): Promise<Outcome> {
     const { data: txn, error } = await admin.rpc('close_auction', {
       p_listing_id: listingId,
       p_fee_bps: PLATFORM_FEE_BPS,
+      p_min_fee_cents: MIN_PLATFORM_FEE_CENTS,
     })
     if (error) return { listingId, result: 'error', message: error.message }
     if (!txn?.id) return { listingId, result: 'no_winner' }

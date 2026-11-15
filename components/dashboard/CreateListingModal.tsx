@@ -8,7 +8,7 @@ import { ImagePlus, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { AreaSelect } from '@/components/AreaSelect'
 import { MAX_PRICE_CENTS, dollarsToCents, formatCents } from '@/lib/money'
-import { PLATFORM_FEE_LABEL, sellerPayoutCents } from '@/lib/fees'
+import { MIN_PRICE_CENTS, PLATFORM_FEE_LABEL, sellerPayoutCents } from '@/lib/fees'
 
 const AUCTION_DURATIONS_DAYS = [1, 3, 5, 7] as const
 const MAX_PHOTOS = 8
@@ -90,6 +90,10 @@ export function CreateListingModal({
     const priceCents = dollarsToCents(price)
     if (priceCents === null) {
       setError('Enter a valid price greater than $0.')
+      return
+    }
+    if (priceCents < MIN_PRICE_CENTS) {
+      setError(`The lowest price on Blockparty is ${formatCents(MIN_PRICE_CENTS)}.`)
       return
     }
     if (priceCents > MAX_PRICE_CENTS) {
@@ -256,20 +260,20 @@ export function CreateListingModal({
                 id="listing-price"
                 type="number"
                 step="0.01"
-                min="0.01"
+                min={MIN_PRICE_CENTS / 100}
                 max={MAX_PRICE_CENTS / 100}
                 required
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 className={inputClass}
               />
-              <p className="mt-1 text-xs text-gray-500">Up to {formatCents(MAX_PRICE_CENTS)}{listingType === 'auction' ? ', including bids' : ''}.</p>
+              <p className="mt-1 text-xs text-gray-500">{formatCents(MIN_PRICE_CENTS)} to {formatCents(MAX_PRICE_CENTS)}{listingType === 'auction' ? ', including bids' : ''}.</p>
               <p className="mt-1 text-xs text-gray-500">
                 {(() => {
                   const cents = price ? dollarsToCents(price) : null
-                  return cents && cents <= MAX_PRICE_CENTS
+                  return cents && cents >= MIN_PRICE_CENTS && cents <= MAX_PRICE_CENTS
                     ? `You get ${formatCents(sellerPayoutCents(cents))}${listingType === 'auction' ? ' at this price' : ''} after the ${PLATFORM_FEE_LABEL} Blockparty fee.`
-                    : `Blockparty keeps ${PLATFORM_FEE_LABEL} of the sale price.`
+                    : `The Blockparty fee is ${PLATFORM_FEE_LABEL} of the sale price.`
                 })()}
               </p>
             </div>
