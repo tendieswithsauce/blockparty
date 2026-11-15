@@ -319,6 +319,14 @@ export type Database = {
         Args: { p_buyer_id: string; p_transaction_id: number; p_window_seconds: number }
         Returns: string
       }
+      close_auction: {
+        Args: { p_fee_bps: number; p_listing_id: number }
+        Returns: Database["public"]["Tables"]["transactions"]["Row"]
+      }
+      release_stale_purchases: {
+        Args: never
+        Returns: { payment_intent_id: string | null; transaction_id: number }[]
+      }
       cancel_pending_purchase: {
         Args: { p_transaction_id: number }
         Returns: undefined

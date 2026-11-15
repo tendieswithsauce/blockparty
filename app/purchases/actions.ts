@@ -10,6 +10,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getStripe, stripeConfigured } from '@/lib/stripe/server'
 import { PLATFORM_FEE_BPS } from '@/lib/fees'
 import { BUY_NOW_CANCEL_WINDOW_SECONDS, CANCEL_GRACE_SECONDS } from '@/lib/purchase-rules'
+import { NoSavedCardError, createHold, markAuthorized } from '@/lib/payments/holds'
 
 export type BuyResult =
   | { status: 'authorized'; transactionId: number }
@@ -45,40 +46,11 @@ export async function buyNow(listingId: number): Promise<BuyResult> {
       return settle(txn, existing)
     }
 
-    const [{ data: profile }, { data: listing }] = await Promise.all([
-      admin.from('profiles').select('stripe_customer_id, stripe_payment_method_id').eq('id', user.id).single(),
-      admin.from('listings').select('title').eq('id', listingId).single(),
-    ])
-    if (!profile?.stripe_customer_id || !profile.stripe_payment_method_id) {
-      await admin.rpc('cancel_pending_purchase', { p_transaction_id: txn.id })
-      return { status: 'error', error: 'Add a payment method before buying.' }
-    }
-
-    const intent = await stripe.paymentIntents.create(
-      {
-        amount: txn.amount_cents,
-        currency: 'cad',
-        customer: profile.stripe_customer_id,
-        payment_method: profile.stripe_payment_method_id,
-        automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
-        capture_method: 'manual',
-        confirm: true,
-        description: `Blockparty order #${txn.id}: ${listing?.title ?? 'item'}`,
-        transfer_group: `txn_${txn.id}`,
-        metadata: {
-          transaction_id: String(txn.id),
-          listing_id: String(txn.listing_id),
-          buyer_id: txn.buyer_id,
-          seller_id: txn.seller_id,
-        },
-      },
-      // One hold per transaction, even if this request is retried.
-      { idempotencyKey: `purchase-${txn.id}` },
-    )
-    await admin.from('transactions').update({ stripe_payment_intent_id: intent.id }).eq('id', txn.id)
+    const intent = await createHold(txn, { offSession: false })
     return settle(txn, intent)
   } catch (err) {
     await admin.rpc('cancel_pending_purchase', { p_transaction_id: txn.id })
+    if (err instanceof NoSavedCardError) return { status: 'error', error: err.message }
     if (err instanceof Stripe.errors.StripeCardError) {
       return { status: 'error', error: `${err.message} You have not been charged.` }
     }
@@ -149,11 +121,7 @@ async function settle(txn: Txn, intent: Stripe.PaymentIntent): Promise<BuyResult
   }
 
   if (intent.status === 'requires_capture') {
-    await admin
-      .from('transactions')
-      .update({ status: 'authorized', authorized_at: new Date().toISOString() })
-      .eq('id', txn.id)
-      .eq('status', 'pending')
+    await markAuthorized(txn.id)
     return { status: 'authorized', transactionId: txn.id }
   }
 

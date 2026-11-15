@@ -53,6 +53,8 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
   const [bids, setBids] = useState<Bid[]>([])
   const [userId, setUserId] = useState<string | null | undefined>(undefined)
   const [hasCard, setHasCard] = useState(false)
+  // Set when the viewer won this auction and their card hold went through.
+  const [wonCents, setWonCents] = useState<number | null>(null)
   // Set in the browser only: the clock isn't available while prerendering.
   const [now, setNow] = useState<number | null>(null)
   const [amount, setAmount] = useState('')
@@ -100,12 +102,19 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
       const uid = auth.user?.id ?? null
       setUserId(uid)
       if (uid) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('stripe_payment_method_id')
-          .eq('id', uid)
-          .single()
-        if (!cancelled) setHasCard(Boolean(profile?.stripe_payment_method_id))
+        const [{ data: profile }, { data: win }] = await Promise.all([
+          supabase.from('profiles').select('stripe_payment_method_id').eq('id', uid).single(),
+          supabase
+            .from('transactions')
+            .select('amount_cents')
+            .eq('listing_id', listing.id)
+            .eq('buyer_id', uid)
+            .in('status', ['authorized', 'dropped_off', 'completed'])
+            .maybeSingle(),
+        ])
+        if (cancelled) return
+        setHasCard(Boolean(profile?.stripe_payment_method_id))
+        setWonCents(win?.amount_cents ?? null)
       }
     }
     loadBids()
@@ -230,7 +239,15 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
       {error && <div className="p-3 rounded-xl text-sm bg-red-50 text-red-700">{error}</div>}
       {message && !error && youreWinning && <div className="p-3 rounded-xl text-sm bg-green-50 text-green-800">{message}</div>}
 
-      {ended ? (
+      {wonCents !== null ? (
+        <div className="flex items-start gap-2 p-4 rounded-xl bg-green-50 text-green-800 text-sm">
+          <Trophy className="w-5 h-5 shrink-0" />
+          <p>
+            <span className="font-semibold">You won!</span> We&apos;ve placed a hold of {formatCents(wonCents)} on your card.
+            You&apos;ll be charged when you pick it up at the hub. We&apos;ll email you when it&apos;s ready.
+          </p>
+        </div>
+      ) : ended ? (
         <p className="text-sm text-slate-600">
           {status === 'active' ? 'This auction has ended. The winner will be notified shortly.' : 'This auction is closed.'}
         </p>
