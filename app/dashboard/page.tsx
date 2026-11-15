@@ -1,7 +1,7 @@
 // app/dashboard/page.tsx
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   CheckCircle2,
@@ -80,6 +80,7 @@ export default function DashboardPage() {
   const [payouts, setPayouts] = useState<PayoutStatus | null | undefined>(undefined)
   const [showModal, setShowModal] = useState(false)
   const [showPayoutPrompt, setShowPayoutPrompt] = useState(false)
+  const payoutReturn = useRef<string | null | undefined>(undefined)
   const [notice, setNotice] = useState<{ kind: 'success' | 'info' | 'error'; text: string } | null>(null)
 
   const load = useCallback(async () => {
@@ -124,24 +125,55 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => {
-    // Message after returning from Stripe payout onboarding.
-    const params = new URLSearchParams(window.location.search)
-    const result = params.get('payouts')
+    let cancelled = false
+    const READY_NOTICE = { kind: 'success', text: "Payouts are set up. You're ready to sell!" } as const
+    const PENDING_NOTICE = {
+      kind: 'info',
+      text: 'Stripe still needs a few details before you can get paid. Pick up where you left off any time.',
+    } as const
+
+    // Message after returning from Stripe payout onboarding. Read the URL only
+    // once (we strip it right away) so a re-run of this effect still knows.
+    if (payoutReturn.current === undefined) {
+      payoutReturn.current = new URLSearchParams(window.location.search).get('payouts')
+      if (payoutReturn.current) window.history.replaceState(null, '', window.location.pathname)
+    }
+    const result = payoutReturn.current
     if (result) {
-      window.history.replaceState(null, '', window.location.pathname)
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of the URL after the Stripe redirect
       setNotice(
         result === 'ready'
-          ? { kind: 'success', text: "Payouts are set up. You're ready to sell!" }
+          ? READY_NOTICE
           : result === 'pending'
-            ? { kind: 'info', text: 'Stripe still needs a few details before you can get paid. Pick up where you left off any time.' }
+            ? { kind: 'info', text: 'Checking your payout setup with Stripe…' }
             : { kind: 'error', text: 'Something went wrong opening payout setup. Please try again.' },
       )
     }
     load()
-    getPayoutStatus()
-      .then(setPayouts)
-      .catch(() => setPayouts(null))
+
+    // Stripe usually takes a few seconds to verify a seller after they submit
+    // onboarding, so right after returning keep re-checking for a little while
+    // before telling them something is still missing.
+    async function checkPayouts() {
+      const attempts = result === 'pending' ? 6 : 1
+      for (let i = 0; i < attempts; i++) {
+        if (i > 0) await new Promise((r) => setTimeout(r, 2000))
+        if (cancelled) return
+        const status = await getPayoutStatus().catch(() => null)
+        if (cancelled) return
+        setPayouts(status)
+        if (status?.ready) {
+          if (result === 'pending') setNotice(READY_NOTICE)
+          return
+        }
+      }
+      if (result === 'pending') setNotice(PENDING_NOTICE)
+    }
+    checkPayouts()
+
+    return () => {
+      cancelled = true
+    }
   }, [load])
 
   const payoutsReady = payouts?.ready === true
