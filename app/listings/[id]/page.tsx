@@ -86,6 +86,7 @@ async function ListingContent({ id }: { id: string }) {
           <BidPanel
             listing={{
               id: listing.id,
+              title: listing.title,
               sellerId: listing.seller_id,
               status: listing.status,
               startingPriceCents: listing.starting_price_cents ?? 0,
@@ -98,6 +99,7 @@ async function ListingContent({ id }: { id: string }) {
           <BuyNowPanel
             listing={{
               id: listing.id,
+              title: listing.title,
               sellerId: listing.seller_id,
               status: listing.status,
               priceCents: listing.buy_now_price_cents ?? 0,

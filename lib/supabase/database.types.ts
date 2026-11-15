@@ -315,6 +315,10 @@ export type Database = {
         Args: { p_buyer_id: string; p_fee_bps: number; p_listing_id: number }
         Returns: Database["public"]["Tables"]["transactions"]["Row"]
       }
+      cancel_authorized_purchase: {
+        Args: { p_buyer_id: string; p_transaction_id: number; p_window_seconds: number }
+        Returns: string
+      }
       cancel_pending_purchase: {
         Args: { p_transaction_id: number }
         Returns: undefined

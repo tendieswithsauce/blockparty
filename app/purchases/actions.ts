@@ -9,6 +9,7 @@ import { getCurrentUser } from '@/lib/auth/current-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getStripe, stripeConfigured } from '@/lib/stripe/server'
 import { PLATFORM_FEE_BPS } from '@/lib/fees'
+import { BUY_NOW_CANCEL_WINDOW_SECONDS, CANCEL_GRACE_SECONDS } from '@/lib/purchase-rules'
 
 export type BuyResult =
   | { status: 'authorized'; transactionId: number }
@@ -108,6 +109,30 @@ export async function confirmPurchase(transactionId: number): Promise<BuyResult>
     console.error('confirmPurchase failed', err)
     return { status: 'error', error: GENERIC_ERROR }
   }
+}
+
+/** Undo a Buy Now within the cancel window: put the item back up and release the hold. */
+export async function cancelPurchase(transactionId: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getCurrentUser()
+  if (!user) return { ok: false, error: 'Please sign in.' }
+
+  const { data: paymentIntentId, error } = await createAdminClient().rpc('cancel_authorized_purchase', {
+    p_transaction_id: transactionId,
+    p_buyer_id: user.id,
+    p_window_seconds: BUY_NOW_CANCEL_WINDOW_SECONDS + CANCEL_GRACE_SECONDS,
+  })
+  if (error) {
+    return { ok: false, error: error.code === 'P0001' ? `${error.message}.` : 'Something went wrong. Please try again.' }
+  }
+
+  // The purchase is already cancelled on our side, so we will never capture
+  // this hold; if releasing it fails, the bank drops it within 7 days anyway.
+  if (paymentIntentId && stripeConfigured()) {
+    await getStripe()
+      .paymentIntents.cancel(paymentIntentId, { cancellation_reason: 'requested_by_customer' })
+      .catch((err) => console.error('Releasing card hold failed', paymentIntentId, err))
+  }
+  return { ok: true }
 }
 
 /** Records the outcome of the card hold and tells the browser what to do next. */

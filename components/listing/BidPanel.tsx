@@ -7,10 +7,12 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Clock, CreditCard, Gavel, Trophy } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { MAX_PRICE_CENTS, dollarsToCents, formatCents } from '@/lib/money'
 
 type ListingInfo = {
   id: number
+  title: string
   sellerId: string
   status: string
   startingPriceCents: number
@@ -54,7 +56,7 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
   // Set in the browser only: the clock isn't available while prerendering.
   const [now, setNow] = useState<number | null>(null)
   const [amount, setAmount] = useState('')
-  const [agreed, setAgreed] = useState(false)
+  const [pendingCents, setPendingCents] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -155,7 +157,8 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
     return (id: string) => (id === userId ? 'You' : (labels.get(id) ?? 'Bidder'))
   }, [bids, userId])
 
-  async function placeBid(e: React.FormEvent) {
+  // Step 1: check the amount, then ask the bidder to confirm.
+  function reviewBid(e: React.FormEvent) {
     e.preventDefault()
     setError('')
     setMessage('')
@@ -163,14 +166,20 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
     if (cents === null) return setError('Enter a valid amount.')
     if (cents < minBidCents) return setError(`Your bid must be at least ${formatCents(minBidCents)}.`)
     if (cents > MAX_PRICE_CENTS) return setError(`Bids are capped at ${formatCents(MAX_PRICE_CENTS)}.`)
-    if (!agreed) return setError('Please confirm the payment terms below.')
+    setPendingCents(cents)
+  }
 
+  // Step 2: the bidder confirmed in the dialog.
+  async function placeBid() {
+    const cents = pendingCents
+    if (cents === null) return
     setSubmitting(true)
     const { data, error: rpcError } = await createClient().rpc('place_bid', {
       p_listing_id: listing.id,
       p_amount_cents: cents,
     })
     setSubmitting(false)
+    setPendingCents(null)
 
     if (rpcError) return setError(friendlyError(rpcError.message))
 
@@ -249,7 +258,7 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
       ) : atMax ? (
         <p className="text-sm text-slate-600">This auction has reached the {formatCents(MAX_PRICE_CENTS)} maximum.</p>
       ) : (
-        <form onSubmit={placeBid} className="space-y-3">
+        <form onSubmit={reviewBid} className="space-y-3">
           <label htmlFor="bid-amount" className="block text-sm font-medium text-slate-700">
             Your bid (minimum {formatCents(minBidCents)})
           </label>
@@ -292,14 +301,27 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
                 </button>
               ))}
           </div>
-          <label className="flex items-start gap-2 text-xs text-slate-600">
-            <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5" />
-            <span>
-              If I win, Blockparty will charge my saved card for my bid and hold the money until I pick up the item at the
-              hub. Bids can&apos;t be withdrawn.
-            </span>
-          </label>
+          <p className="text-xs text-slate-500">You&apos;ll review your bid before it&apos;s placed.</p>
         </form>
+      )}
+
+      {pendingCents !== null && (
+        <ConfirmDialog
+          title={`Bid ${formatCents(pendingCents)}?`}
+          confirmLabel={`Place ${formatCents(pendingCents)} bid`}
+          busyLabel="Bidding…"
+          busy={submitting}
+          onConfirm={placeBid}
+          onCancel={() => setPendingCents(null)}
+        >
+          <p>
+            You&apos;re bidding <strong>{formatCents(pendingCents)}</strong> on <strong>{listing.title}</strong>.
+          </p>
+          <p>
+            If you win, Blockparty will charge your saved card for your bid and hold the money until you pick up the item at
+            the hub. <strong>Bids can&apos;t be withdrawn.</strong>
+          </p>
+        </ConfirmDialog>
       )}
 
       {bids.length > 0 && (
