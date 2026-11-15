@@ -1,0 +1,150 @@
+// app/purchases/actions.ts
+// Buy Now: reserve the listing, then put a hold on the buyer's saved card for
+// the price (a PaymentIntent with manual capture). The hold is captured at the
+// pickup handoff; nothing is charged yet.
+'use server'
+
+import Stripe from 'stripe'
+import { getCurrentUser } from '@/lib/auth/current-user'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { getStripe, stripeConfigured } from '@/lib/stripe/server'
+import { PLATFORM_FEE_BPS } from '@/lib/fees'
+
+export type BuyResult =
+  | { status: 'authorized'; transactionId: number }
+  | { status: 'requires_action'; transactionId: number; clientSecret: string }
+  | { status: 'error'; error: string }
+
+const GENERIC_ERROR = 'Something went wrong placing the hold on your card. You have not been charged.'
+
+type Txn = { id: number; buyer_id: string; status: string; stripe_payment_intent_id: string | null }
+
+export async function buyNow(listingId: number): Promise<BuyResult> {
+  if (!stripeConfigured()) return { status: 'error', error: 'Payments are not set up yet. Please try again later.' }
+  const user = await getCurrentUser()
+  if (!user) return { status: 'error', error: 'Please sign in to buy.' }
+  if (!Number.isSafeInteger(listingId)) return { status: 'error', error: 'Listing not found.' }
+
+  const admin = createAdminClient()
+  const { data: txn, error: reserveError } = await admin.rpc('begin_purchase', {
+    p_listing_id: listingId,
+    p_buyer_id: user.id,
+    p_fee_bps: PLATFORM_FEE_BPS,
+  })
+  if (reserveError || !txn) {
+    // Our own messages from the database (P0001) are written for buyers.
+    return { status: 'error', error: reserveError?.code === 'P0001' ? reserveError.message : GENERIC_ERROR }
+  }
+
+  const stripe = getStripe()
+  try {
+    // Retrying after a 3D Secure prompt was closed: reuse the same hold.
+    if (txn.stripe_payment_intent_id) {
+      const existing = await stripe.paymentIntents.retrieve(txn.stripe_payment_intent_id)
+      return settle(txn, existing)
+    }
+
+    const [{ data: profile }, { data: listing }] = await Promise.all([
+      admin.from('profiles').select('stripe_customer_id, stripe_payment_method_id').eq('id', user.id).single(),
+      admin.from('listings').select('title').eq('id', listingId).single(),
+    ])
+    if (!profile?.stripe_customer_id || !profile.stripe_payment_method_id) {
+      await admin.rpc('cancel_pending_purchase', { p_transaction_id: txn.id })
+      return { status: 'error', error: 'Add a payment method before buying.' }
+    }
+
+    const intent = await stripe.paymentIntents.create(
+      {
+        amount: txn.amount_cents,
+        currency: 'cad',
+        customer: profile.stripe_customer_id,
+        payment_method: profile.stripe_payment_method_id,
+        automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
+        capture_method: 'manual',
+        confirm: true,
+        description: `Blockparty order #${txn.id}: ${listing?.title ?? 'item'}`,
+        transfer_group: `txn_${txn.id}`,
+        metadata: {
+          transaction_id: String(txn.id),
+          listing_id: String(txn.listing_id),
+          buyer_id: txn.buyer_id,
+          seller_id: txn.seller_id,
+        },
+      },
+      // One hold per transaction, even if this request is retried.
+      { idempotencyKey: `purchase-${txn.id}` },
+    )
+    await admin.from('transactions').update({ stripe_payment_intent_id: intent.id }).eq('id', txn.id)
+    return settle(txn, intent)
+  } catch (err) {
+    await admin.rpc('cancel_pending_purchase', { p_transaction_id: txn.id })
+    if (err instanceof Stripe.errors.StripeCardError) {
+      return { status: 'error', error: `${err.message} You have not been charged.` }
+    }
+    console.error('buyNow failed', err)
+    return { status: 'error', error: GENERIC_ERROR }
+  }
+}
+
+/** Called by the browser after the buyer finishes a 3D Secure check. */
+export async function confirmPurchase(transactionId: number): Promise<BuyResult> {
+  if (!stripeConfigured()) return { status: 'error', error: GENERIC_ERROR }
+  const user = await getCurrentUser()
+  if (!user) return { status: 'error', error: 'Please sign in to buy.' }
+
+  const admin = createAdminClient()
+  const { data: txn } = await admin
+    .from('transactions')
+    .select('id, buyer_id, status, stripe_payment_intent_id')
+    .eq('id', transactionId)
+    .eq('buyer_id', user.id)
+    .maybeSingle()
+  if (!txn?.stripe_payment_intent_id) return { status: 'error', error: GENERIC_ERROR }
+
+  try {
+    const intent = await getStripe().paymentIntents.retrieve(txn.stripe_payment_intent_id)
+    return settle(txn, intent)
+  } catch (err) {
+    console.error('confirmPurchase failed', err)
+    return { status: 'error', error: GENERIC_ERROR }
+  }
+}
+
+/** Records the outcome of the card hold and tells the browser what to do next. */
+async function settle(txn: Txn, intent: Stripe.PaymentIntent): Promise<BuyResult> {
+  const admin = createAdminClient()
+
+  if (txn.status === 'authorized') return { status: 'authorized', transactionId: txn.id }
+  if (txn.status !== 'pending') {
+    // The reservation expired and the item went to someone else: drop the hold.
+    if (intent.status === 'requires_capture' || intent.status === 'requires_action') {
+      await getStripe().paymentIntents.cancel(intent.id).catch(() => {})
+    }
+    return { status: 'error', error: 'Your reservation expired and the item is no longer available. You have not been charged.' }
+  }
+
+  if (intent.status === 'requires_capture') {
+    await admin
+      .from('transactions')
+      .update({ status: 'authorized', authorized_at: new Date().toISOString() })
+      .eq('id', txn.id)
+      .eq('status', 'pending')
+    return { status: 'authorized', transactionId: txn.id }
+  }
+
+  if (intent.status === 'requires_action' && intent.client_secret) {
+    return { status: 'requires_action', transactionId: txn.id, clientSecret: intent.client_secret }
+  }
+
+  // Declined or failed 3D Secure: release the listing.
+  if (intent.status !== 'canceled') await getStripe().paymentIntents.cancel(intent.id).catch(() => {})
+  await admin.rpc('cancel_pending_purchase', { p_transaction_id: txn.id })
+  // Card errors carry a buyer-friendly message ("Your card was declined.");
+  // others (e.g. a failed 3D Secure check) are written for developers.
+  const lastError = intent.last_payment_error
+  const reason =
+    lastError?.type === 'card_error' && lastError.code !== 'payment_intent_authentication_failure' && lastError.message
+      ? lastError.message
+      : "Your bank couldn't verify this purchase."
+  return { status: 'error', error: `${reason} You have not been charged.` }
+}

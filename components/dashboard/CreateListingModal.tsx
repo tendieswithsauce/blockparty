@@ -8,6 +8,7 @@ import { ImagePlus, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { DEFAULT_HUB, HUBS } from '@/lib/hubs'
 import { MAX_PRICE_CENTS, dollarsToCents, formatCents } from '@/lib/money'
+import { PLATFORM_FEE_LABEL, sellerPayoutCents } from '@/lib/fees'
 
 const AUCTION_DURATIONS_DAYS = [1, 3, 5, 7] as const
 const MAX_PHOTOS = 8
@@ -259,6 +260,14 @@ export function CreateListingModal({
                 className={inputClass}
               />
               <p className="mt-1 text-xs text-gray-500">Up to {formatCents(MAX_PRICE_CENTS)}{listingType === 'auction' ? ', including bids' : ''}.</p>
+              <p className="mt-1 text-xs text-gray-500">
+                {(() => {
+                  const cents = price ? dollarsToCents(price) : null
+                  return cents && cents <= MAX_PRICE_CENTS
+                    ? `You get ${formatCents(sellerPayoutCents(cents))}${listingType === 'auction' ? ' at this price' : ''} after the ${PLATFORM_FEE_LABEL} Blockparty fee.`
+                    : `Blockparty keeps ${PLATFORM_FEE_LABEL} of the sale price.`
+                })()}
+              </p>
             </div>
             <div>
               <label htmlFor="listing-format" className="block text-sm font-medium text-gray-700">Format</label>

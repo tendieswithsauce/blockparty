@@ -3,14 +3,15 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { connection } from 'next/server'
 import { ArrowLeft, MapPin, ShieldCheck, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { hubName } from '@/lib/hubs'
-import { formatCents } from '@/lib/money'
 import { SiteHeader } from '@/components/SiteHeader'
 import { PhotoGallery } from '@/components/listing/PhotoGallery'
 import { BidPanel } from '@/components/listing/BidPanel'
+import { BuyNowPanel } from '@/components/listing/BuyNowPanel'
 
 export default function ListingPage({ params }: PageProps<'/listings/[id]'>) {
   return (
@@ -34,6 +35,9 @@ async function ListingContent({ id }: { id: string }) {
   const listingId = Number(id)
   if (!Number.isSafeInteger(listingId) || listingId <= 0) notFound()
 
+  // Per-request data (signed-in viewer, live price); also keeps the Supabase
+  // client's clock reads out of the prerender.
+  await connection()
   const supabase = await createClient()
   const { data: listing } = await supabase
     .from('listings')
@@ -91,17 +95,15 @@ async function ListingContent({ id }: { id: string }) {
             }}
           />
         ) : (
-          <div className="bg-white border rounded-2xl p-6 shadow-sm space-y-4">
-            <p className="text-sm text-slate-500">Price</p>
-            <p className="text-4xl font-extrabold text-[#0E4D5C]">{formatCents(listing.buy_now_price_cents ?? 0)}</p>
-            <button
-              disabled
-              className="w-full py-3 rounded-full bg-[#F26B5B] text-white font-bold opacity-60 cursor-not-allowed"
-              title="Checkout is coming next"
-            >
-              Buy Now (coming soon)
-            </button>
-          </div>
+          <BuyNowPanel
+            listing={{
+              id: listing.id,
+              sellerId: listing.seller_id,
+              status: listing.status,
+              priceCents: listing.buy_now_price_cents ?? 0,
+              hubName: hubName(listing.location_hub),
+            }}
+          />
         )}
 
         <div className="flex items-start gap-3 bg-[#0E4D5C]/5 rounded-2xl p-4 text-sm">

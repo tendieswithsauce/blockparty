@@ -227,7 +227,9 @@ export type Database = {
       transactions: {
         Row: {
           amount_cents: number
+          authorized_at: string | null
           buyer_id: string
+          canceled_at: string | null
           created_at: string
           dropoff_code: string | null
           dropped_off_at: string | null
@@ -244,7 +246,9 @@ export type Database = {
         }
         Insert: {
           amount_cents: number
+          authorized_at?: string | null
           buyer_id: string
+          canceled_at?: string | null
           created_at?: string
           dropoff_code?: string | null
           dropped_off_at?: string | null
@@ -261,7 +265,9 @@ export type Database = {
         }
         Update: {
           amount_cents?: number
+          authorized_at?: string | null
           buyer_id?: string
+          canceled_at?: string | null
           created_at?: string
           dropoff_code?: string | null
           dropped_off_at?: string | null
@@ -305,6 +311,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      begin_purchase: {
+        Args: { p_buyer_id: string; p_fee_bps: number; p_listing_id: number }
+        Returns: Database["public"]["Tables"]["transactions"]["Row"]
+      }
+      cancel_pending_purchase: {
+        Args: { p_transaction_id: number }
+        Returns: undefined
+      }
       get_handoff_code: { Args: { p_transaction_id: number }; Returns: string }
       place_bid: {
         Args: { p_amount_cents: number; p_listing_id: number }

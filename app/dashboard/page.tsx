@@ -44,7 +44,14 @@ type MyBid = {
   listing: { id: number; title: string; current_bid_cents: number | null; ends_at: string | null; status: string } | null
 }
 
-type MyPurchase = { id: number; amount_cents: number; status: string; created_at: string; listing_id: number }
+type MyPurchase = {
+  id: number
+  amount_cents: number
+  status: string
+  created_at: string
+  listing_id: number
+  listing: { title: string; location_hub: string } | null
+}
 
 type DashboardData = {
   firstName: string
@@ -63,7 +70,7 @@ const STATUS_LABELS: Record<string, string> = {
   inactive: 'Inactive',
   incomplete: 'Draft',
   pending: 'Pending',
-  authorized: 'Paid, held',
+  authorized: 'Card on hold',
   dropped_off: 'At hub',
   completed: 'Picked up',
   canceled: 'Canceled',
@@ -101,14 +108,15 @@ export default function DashboardPage() {
         .order('created_at', { ascending: false }),
       supabase
         .from('bids')
-        .select('id, amount_cents, created_at, listing:listings(id, title, current_bid_cents, ends_at, status)')
+        .select('id, amount_cents, created_at, listing:listings!bids_listing_id_fkey(id, title, current_bid_cents, ends_at, status)')
         .eq('bidder_id', user.id)
         .order('created_at', { ascending: false })
         .limit(20),
       supabase
         .from('transactions')
-        .select('id, amount_cents, status, created_at, listing_id')
+        .select('id, amount_cents, status, created_at, listing_id, listing:listings(title, location_hub)')
         .eq('buyer_id', user.id)
+        .in('status', ['authorized', 'dropped_off', 'completed', 'refunded'])
         .order('created_at', { ascending: false })
         .limit(20),
     ])
@@ -120,7 +128,7 @@ export default function DashboardPage() {
       hasCard: Boolean(profile?.stripe_payment_method_id),
       listings: (listingsRes.data ?? []) as MyListing[],
       bids: (bidsRes.data ?? []) as unknown as MyBid[],
-      purchases: (purchasesRes.data ?? []) as MyPurchase[],
+      purchases: (purchasesRes.data ?? []) as unknown as MyPurchase[],
     })
   }, [])
 
@@ -353,7 +361,9 @@ export default function DashboardPage() {
                   </div>
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="font-semibold line-clamp-1">{l.title}</p>
+                      <Link href={`/listings/${l.id}`} className="font-semibold line-clamp-1 hover:text-[#F26B5B]">
+                        {l.title}
+                      </Link>
                       <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 shrink-0">
                         {STATUS_LABELS[l.status] ?? l.status}
                       </span>
@@ -419,9 +429,15 @@ export default function DashboardPage() {
               <ul className="divide-y">
                 {data.purchases.map((p) => (
                   <li key={p.id} className="py-3 flex justify-between gap-4 text-sm">
-                    <span>Order #{p.id}</span>
-                    <span>
-                      {formatCents(p.amount_cents)} · {STATUS_LABELS[p.status] ?? p.status}
+                    <span className="min-w-0">
+                      <Link href={`/listings/${p.listing_id}`} className="font-medium line-clamp-1 hover:text-[#F26B5B]">
+                        {p.listing?.title ?? `Order #${p.id}`}
+                      </Link>
+                      {p.listing && <span className="text-xs text-slate-500">Pickup at {hubName(p.listing.location_hub)}</span>}
+                    </span>
+                    <span className="shrink-0 text-right">
+                      {formatCents(p.amount_cents)}
+                      <span className="block text-xs font-semibold text-[#0E4D5C]">{STATUS_LABELS[p.status] ?? p.status}</span>
                     </span>
                   </li>
                 ))}
