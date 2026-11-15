@@ -1,8 +1,8 @@
 'use server'
 
-import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { siteUrl } from '@/lib/site-url'
 import { safeNextPath } from '@/lib/auth/redirect'
 
 export type AuthFormState = {
@@ -11,19 +11,6 @@ export type AuthFormState = {
 }
 
 const MIN_PASSWORD_LENGTH = 8
-
-/** Absolute site origin for links in auth emails and OAuth redirects. */
-async function siteUrl(): Promise<string> {
-  if (process.env.NEXT_PUBLIC_SITE_URL) {
-    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')
-  }
-  const h = await headers()
-  const origin = h.get('origin')
-  if (origin) return origin
-  const host = h.get('x-forwarded-host') ?? h.get('host')
-  const proto = h.get('x-forwarded-proto') ?? 'https'
-  return `${proto}://${host}`
-}
 
 function field(formData: FormData, name: string): string {
   const value = formData.get(name)
@@ -76,7 +63,7 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
     options: {
       // Picked up by the handle_new_user() trigger into profiles.full_name.
       data: { full_name: fullName },
-      emailRedirectTo: `${await siteUrl()}/auth/callback?next=/profile`,
+      emailRedirectTo: `${await siteUrl()}/auth/callback?next=/dashboard`,
     },
   })
 
@@ -89,7 +76,7 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
   }
 
   // Email confirmation turned off in Supabase: the user is signed in already.
-  if (data.session) redirect('/profile')
+  if (data.session) redirect('/dashboard')
 
   // Supabase answers a sign-up for an email that already has an account with a
   // fake success (a user with no identities) and sends no email.

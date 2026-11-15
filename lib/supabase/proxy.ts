@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from './database.types'
 
 /** Pages that require a signed-in user. */
-const PROTECTED_PREFIXES = ['/dashboard', '/profile', '/reset-password']
+const PROTECTED_PREFIXES = ['/dashboard', '/profile', '/reset-password', '/payouts']
 
 /** Pages a signed-in user has no reason to see. */
 const SIGNED_OUT_ONLY = ['/login', '/signup', '/forgot-password']
@@ -15,6 +15,19 @@ function matches(pathname: string, prefixes: string[]) {
 }
 
 export async function updateSession(request: NextRequest) {
+  // If Supabase can't match an email link's redirect URL against the allowed
+  // Redirect URLs, it falls back to the Site URL with ?code=... attached (e.g.
+  // the homepage). Hand that code to the callback so the user still gets signed in.
+  const code = request.nextUrl.searchParams.get('code')
+  if (code && !request.nextUrl.pathname.startsWith('/auth/')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/auth/callback'
+    url.search = ''
+    url.searchParams.set('code', code)
+    url.searchParams.set('next', '/dashboard')
+    return NextResponse.redirect(url)
+  }
+
   let response = NextResponse.next({ request })
 
   const supabase = createServerClient<Database>(

@@ -1,7 +1,7 @@
 // app/auth/confirm/route.ts
 // Token-hash email links (works across devices, unlike the PKCE ?code= flow).
 // Point the Supabase email templates here, e.g. for "Confirm signup":
-//   {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/profile
+//   {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/dashboard
 // and for "Reset password":
 //   {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password
 import type { EmailOtpType } from '@supabase/supabase-js'

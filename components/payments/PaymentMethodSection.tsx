@@ -73,6 +73,14 @@ export function PaymentMethodSection() {
       if (res.ok) setCard(res.data)
       else setError(res.error)
       setLoading(false)
+
+      // Linked from the dashboard (/profile#payment-method): the profile page
+      // renders after loading, so the browser couldn't jump here on its own.
+      if (window.location.hash === '#payment-method') {
+        requestAnimationFrame(() =>
+          document.getElementById('payment-method')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+        )
+      }
     }
     load()
     return () => {
@@ -97,7 +105,7 @@ export function PaymentMethodSection() {
   }
 
   return (
-    <div className="bg-white border rounded-xl p-8 shadow-sm mt-6">
+    <div id="payment-method" className="bg-white border rounded-xl p-8 shadow-sm mt-6 scroll-mt-24">
       <h2 className="text-xl font-bold mb-1">Payment method</h2>
       <p className="text-sm text-gray-500 mb-5">
         Saved securely with Stripe. You&apos;re only charged when you win an auction or use Buy Now, and the

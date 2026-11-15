@@ -21,7 +21,7 @@ export function SignupForm() {
     <div className="space-y-6">
       <FormAlert error={state.error} />
 
-      <GoogleButton next="/profile" />
+      <GoogleButton next="/dashboard" />
 
       <form action={formAction} className="space-y-4">
         <TextField id="full_name" name="full_name" label="Full name" autoComplete="name" required maxLength={100} />
