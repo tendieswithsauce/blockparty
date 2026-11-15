@@ -5,9 +5,10 @@
 // and for "Reset password":
 //   {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password
 import type { EmailOtpType } from '@supabase/supabase-js'
-import { NextResponse, type NextRequest } from 'next/server'
+import { after, NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { safeNextPath } from '@/lib/auth/redirect'
+import { sendWelcomeEmailOnce } from '@/lib/email/welcome'
 
 const ALLOWED_TYPES: EmailOtpType[] = ['signup', 'email', 'recovery', 'invite', 'email_change', 'magiclink']
 
@@ -19,8 +20,11 @@ export async function GET(request: NextRequest) {
 
   if (tokenHash && type && ALLOWED_TYPES.includes(type)) {
     const supabase = await createClient()
-    const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash })
+    const { data, error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash })
     if (!error) {
+      // Email confirmed: welcome email, sent once.
+      const userId = data.user?.id
+      if (userId && type !== 'recovery') after(() => sendWelcomeEmailOnce(userId, origin))
       return NextResponse.redirect(`${origin}${next}`)
     }
   }

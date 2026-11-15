@@ -178,6 +178,7 @@ export type Database = {
           stripe_payouts_enabled: boolean
           updated_at: string
           username: string | null
+          welcome_email_sent_at: string | null
         }
         Insert: {
           address?: Json | null
@@ -194,6 +195,7 @@ export type Database = {
           stripe_payouts_enabled?: boolean
           updated_at?: string
           username?: string | null
+          welcome_email_sent_at?: string | null
         }
         Update: {
           address?: Json | null
@@ -210,6 +212,7 @@ export type Database = {
           stripe_payouts_enabled?: boolean
           updated_at?: string
           username?: string | null
+          welcome_email_sent_at?: string | null
         }
         Relationships: [
           {
