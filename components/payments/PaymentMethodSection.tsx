@@ -108,7 +108,7 @@ export function PaymentMethodSection() {
     <div id="payment-method" className="bg-white border rounded-xl p-8 shadow-sm mt-6 scroll-mt-24">
       <h2 className="text-xl font-bold mb-1">Payment method</h2>
       <p className="text-sm text-gray-500 mb-5">
-        Saved securely with Stripe. When you win an auction or use Buy Now we place a hold on it, and you&apos;re only
+        Saved securely with Stripe. When you win an auction or buy a set-price item we place a hold on it, and you&apos;re only
         charged once you&apos;ve met the seller and accepted the item.
       </p>
 

@@ -46,10 +46,14 @@ export async function signIn(_prev: AuthFormState, formData: FormData): Promise<
 // Email + password sign-up
 // ---------------------------------------------------------------------------
 export async function signUp(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
+  const username = field(formData, 'username')
   const fullName = field(formData, 'full_name')
   const email = field(formData, 'email')
   const password = formData.get('password')
 
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) {
+    return { error: 'Display names are 3–20 letters, numbers or underscores.' }
+  }
   if (!fullName) return { error: 'Enter your name.' }
   if (!email) return { error: 'Enter your email.' }
   if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
@@ -57,12 +61,16 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
   }
 
   const supabase = await createClient()
+  const { data: nameProblem } = await supabase.rpc('check_username', { p_name: username })
+  if (nameProblem) return { error: `Display name: ${nameProblem}` }
+
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      // Picked up by the handle_new_user() trigger into profiles.full_name.
-      data: { full_name: fullName },
+      // Picked up by the handle_new_user() trigger into profiles. If the
+      // display name was taken in the meantime, a random one is used instead.
+      data: { full_name: fullName, username },
       emailRedirectTo: `${await siteUrl()}/auth/callback?next=/dashboard`,
     },
   })

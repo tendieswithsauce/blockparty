@@ -42,19 +42,19 @@ async function ListingContent({ id }: { id: string }) {
   const { data: listing } = await supabase
     .from('listings')
     .select(
-      'id, seller_id, title, description, listing_type, status, area:areas(name, city), image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, created_at',
+      'id, seller_id, title, description, listing_type, status, area:areas(name, city), image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, created_at',
     )
     .eq('id', listingId)
     .maybeSingle()
   if (!listing) notFound()
 
-  // Profiles are private; only show the seller's first name.
+  // Profiles are private; only show the seller's display name.
   const { data: seller } = await createAdminClient()
     .from('profiles')
-    .select('full_name, created_at')
+    .select('username, created_at')
     .eq('id', listing.seller_id)
     .maybeSingle()
-  const sellerFirstName = seller?.full_name?.split(' ')[0] || 'A neighbour'
+  const sellerName = seller?.username || 'A neighbour'
   const memberSince = seller?.created_at
     ? new Date(seller.created_at).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' })
     : null
@@ -74,7 +74,7 @@ async function ListingContent({ id }: { id: string }) {
               listing.listing_type === 'auction' ? 'bg-[#F26B5B]' : 'bg-[#0E4D5C]'
             }`}
           >
-            {listing.listing_type === 'auction' ? 'Auction' : 'Buy It Now'}
+            {listing.listing_type === 'auction' ? 'Auction' : 'Set price'}
           </span>
           <h1 className="text-3xl font-extrabold tracking-tight mt-3">{listing.title}</h1>
           <p className="flex items-center gap-1 text-sm text-slate-500 mt-2">
@@ -93,6 +93,8 @@ async function ListingContent({ id }: { id: string }) {
               currentBidCents: listing.current_bid_cents,
               bidCount: listing.bid_count,
               endsAt: listing.ends_at,
+              hasReserve: listing.has_reserve,
+              reserveMet: listing.reserve_met,
             }}
           />
         ) : (
@@ -119,7 +121,7 @@ async function ListingContent({ id }: { id: string }) {
             <User className="w-5 h-5 text-[#0E4D5C]" />
           </span>
           <div>
-            <p className="font-semibold">Sold by {sellerFirstName}</p>
+            <p className="font-semibold">Sold by {sellerName}</p>
             {memberSince && <p className="text-slate-500">Member since {memberSince}</p>}
           </div>
         </div>

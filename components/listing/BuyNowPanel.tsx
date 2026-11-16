@@ -200,7 +200,7 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
             }}
             className="flex items-center justify-center gap-2 w-full py-3 rounded-full bg-[#F26B5B] text-white font-bold hover:bg-[#e05a4a]"
           >
-            <ShoppingBag className="w-4 h-4" /> Buy Now for {price}
+            <ShoppingBag className="w-4 h-4" /> Buy for {price}
           </button>
           <p className="text-xs text-slate-500">You&apos;ll review your purchase before anything happens.</p>
         </div>

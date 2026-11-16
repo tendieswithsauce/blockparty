@@ -38,6 +38,8 @@ export function CreateListingModal({
   const [price, setPrice] = useState('')
   const [listingType, setListingType] = useState<'fixed' | 'auction'>('fixed')
   const [durationDays, setDurationDays] = useState<number>(3)
+  const [useReserve, setUseReserve] = useState(false)
+  const [reserve, setReserve] = useState('')
   const [areaId, setAreaId] = useState<string>(defaultArea ?? '')
   const [photos, setPhotos] = useState<Photo[]>([])
   const [error, setError] = useState('')
@@ -100,6 +102,22 @@ export function CreateListingModal({
       setError(`Blockparty is for items up to ${formatCents(MAX_PRICE_CENTS)}. Lower the price to list it.`)
       return
     }
+    let reserveCents: number | null = null
+    if (listingType === 'auction' && useReserve) {
+      reserveCents = dollarsToCents(reserve)
+      if (reserveCents === null) {
+        setError('Enter a valid reserve price, or choose No reserve.')
+        return
+      }
+      if (reserveCents <= priceCents) {
+        setError('The reserve must be higher than the starting price.')
+        return
+      }
+      if (reserveCents > MAX_PRICE_CENTS) {
+        setError(`The reserve can be at most ${formatCents(MAX_PRICE_CENTS)}.`)
+        return
+      }
+    }
     if (photos.length === 0) {
       setError('Add at least one photo so buyers can see the item.')
       return
@@ -136,25 +154,17 @@ export function CreateListingModal({
       uploaded.push(path)
     }
 
-    // 2. Create the listing. Fixed price needs buy_now_price_cents; auctions
-    // need a starting price and an end time (DB check constraint).
+    // 2. Create the listing (and its secret reserve) in one call.
     setStatus('Publishing…')
-    const pricing =
-      listingType === 'fixed'
-        ? { buy_now_price_cents: priceCents }
-        : {
-            starting_price_cents: priceCents,
-            ends_at: new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString(),
-          }
-
-    const { error: insertError } = await supabase.from('listings').insert({
-      seller_id: user.id,
-      title: title.trim(),
-      description: description.trim() || null,
-      listing_type: listingType,
-      area_id: areaId,
-      image_paths: uploaded,
-      ...pricing,
+    const { error: insertError } = await supabase.rpc('create_listing', {
+      p_title: title.trim(),
+      p_description: description.trim() || null,
+      p_listing_type: listingType,
+      p_area_id: areaId,
+      p_image_paths: uploaded,
+      p_price_cents: priceCents,
+      p_duration_days: listingType === 'auction' ? durationDays : null,
+      p_reserve_cents: reserveCents,
     })
 
     if (insertError) {
@@ -162,7 +172,9 @@ export function CreateListingModal({
       setError(
         insertError.code === '42501'
           ? 'Finish setting up payouts before listing an item.'
-          : `Could not publish your listing: ${insertError.message}`,
+          : insertError.code === 'P0001'
+            ? insertError.message
+            : `Could not publish your listing: ${insertError.message}`,
       )
       setStatus('')
       setSaving(false)
@@ -285,7 +297,7 @@ export function CreateListingModal({
                 onChange={(e) => setListingType(e.target.value as 'fixed' | 'auction')}
                 className={inputClass}
               >
-                <option value="fixed">Fixed price</option>
+                <option value="fixed">Set price</option>
                 <option value="auction">Auction</option>
               </select>
             </div>
@@ -307,6 +319,42 @@ export function CreateListingModal({
                 ))}
               </select>
             </div>
+          )}
+
+          {listingType === 'auction' && (
+            <fieldset>
+              <legend className="block text-sm font-medium text-gray-700">Reserve price</legend>
+              <div className="mt-1 flex gap-4 text-sm">
+                <label className="inline-flex items-center gap-2">
+                  <input type="radio" name="reserve" checked={!useReserve} onChange={() => setUseReserve(false)} />
+                  No reserve
+                </label>
+                <label className="inline-flex items-center gap-2">
+                  <input type="radio" name="reserve" checked={useReserve} onChange={() => setUseReserve(true)} />
+                  Set a reserve
+                </label>
+              </div>
+              {useReserve && (
+                <input
+                  id="listing-reserve"
+                  type="number"
+                  step="0.01"
+                  min={MIN_PRICE_CENTS / 100}
+                  max={MAX_PRICE_CENTS / 100}
+                  required
+                  placeholder="Lowest price you'll accept ($)"
+                  aria-label="Reserve price in dollars"
+                  value={reserve}
+                  onChange={(e) => setReserve(e.target.value)}
+                  className={inputClass}
+                />
+              )}
+              <p className="mt-1 text-xs text-gray-500">
+                {useReserve
+                  ? "Kept secret. Bidders only see whether it's been met. If bidding ends below it, the item doesn't sell."
+                  : 'The item sells to the highest bidder, whatever the final price.'}
+              </p>
+            </fieldset>
           )}
 
           <div>

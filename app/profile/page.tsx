@@ -4,10 +4,16 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { AreaSelect } from '@/components/AreaSelect'
+import { DisplayNameField, type NameStatus } from '@/components/DisplayNameField'
 import { SiteHeader } from '@/components/SiteHeader'
 import { PaymentMethodSection } from '@/components/payments/PaymentMethodSection'
 
 export default function ProfilePage() {
+  const [username, setUsername] = useState('')
+  const [savedUsername, setSavedUsername] = useState('')
+  const [nameStatus, setNameStatus] = useState<NameStatus>('idle')
+  // Set when the 30-day wait since the last name change hasn't passed yet.
+  const [nameLockedUntil, setNameLockedUntil] = useState<string | null>(null)
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [areaId, setAreaId] = useState<string>('')
@@ -23,10 +29,16 @@ export default function ProfilePage() {
         // The profile row is created automatically on sign-up (DB trigger).
         const { data } = await supabase
           .from('profiles')
-          .select('full_name, phone, area_id')
+          .select('username, username_changed_at, full_name, phone, area_id')
           .eq('id', user.id)
           .single()
         if (data) {
+          setUsername(data.username)
+          setSavedUsername(data.username)
+          const unlock = data.username_changed_at ? new Date(data.username_changed_at).getTime() + 30 * 86_400_000 : 0
+          setNameLockedUntil(
+            unlock > Date.now() ? new Date(unlock).toLocaleDateString('en-CA', { month: 'long', day: 'numeric' }) : null,
+          )
           setFullName(data.full_name || '')
           setPhone(data.phone || '')
           setAreaId(data.area_id || '')
@@ -48,6 +60,19 @@ export default function ProfilePage() {
       setStatusMsg('You must be signed in to update your profile.')
       setSaving(false)
       return
+    }
+
+    if (username !== savedUsername) {
+      const { error: nameError } = await supabase.rpc('set_username', { p_name: username })
+      if (nameError) {
+        setStatusMsg(nameError.code === 'P0001' ? `${nameError.message}.` : 'Could not change your display name.')
+        setSaving(false)
+        return
+      }
+      if (username.toLowerCase() !== savedUsername.toLowerCase()) {
+        setNameLockedUntil(new Date(Date.now() + 30 * 86_400_000).toLocaleDateString('en-CA', { month: 'long', day: 'numeric' }))
+      }
+      setSavedUsername(username)
     }
 
     const { error } = await supabase
@@ -84,7 +109,23 @@ export default function ProfilePage() {
 
         <form onSubmit={handleSaveProfile} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Full Name</label>
+            <DisplayNameField
+              value={username}
+              onChange={setUsername}
+              onStatus={setNameStatus}
+              original={savedUsername}
+              disabled={!!nameLockedUntil}
+              inputClassName="w-full border px-3 py-2 pr-9 rounded-lg focus:ring-2 focus:ring-black focus:outline-none disabled:bg-slate-50 disabled:text-slate-500"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              {nameLockedUntil
+                ? `You can change your display name again on ${nameLockedUntil}.`
+                : 'You can change it once every 30 days.'}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Full name <span className="font-normal text-gray-400">(private)</span></label>
             <input
               type="text"
               value={fullName}
@@ -119,8 +160,8 @@ export default function ProfilePage() {
 
           <button
             type="submit"
-            disabled={saving}
-            className="w-full bg-black text-white py-3 rounded-lg font-medium hover:bg-gray-800 transition mt-4"
+            disabled={saving || nameStatus === 'checking' || nameStatus === 'bad'}
+            className="w-full bg-black disabled:opacity-60 text-white py-3 rounded-lg font-medium hover:bg-gray-800 transition mt-4"
           >
             {saving ? 'Saving...' : 'Save Profile'}
           </button>

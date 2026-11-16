@@ -19,6 +19,8 @@ type ListingInfo = {
   currentBidCents: number | null
   bidCount: number
   endsAt: string | null
+  hasReserve: boolean
+  reserveMet: boolean
 }
 
 type Bid = { id: number; amount_cents: number; created_at: string; bidder_id: string }
@@ -50,6 +52,7 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
   const [bidCount, setBidCount] = useState(listing.bidCount)
   const [status, setStatus] = useState(listing.status)
   const [endsAt, setEndsAt] = useState(listing.endsAt)
+  const [reserveMet, setReserveMet] = useState(listing.reserveMet)
   const [bids, setBids] = useState<Bid[]>([])
   const [userId, setUserId] = useState<string | null | undefined>(undefined)
   const [hasCard, setHasCard] = useState(false)
@@ -135,11 +138,12 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'listings', filter: `id=eq.${listing.id}` },
         (payload) => {
-          const row = payload.new as { current_bid_cents: number | null; bid_count: number; status: string; ends_at: string | null }
+          const row = payload.new as { current_bid_cents: number | null; bid_count: number; status: string; ends_at: string | null; reserve_met: boolean }
           setCurrentBid(row.current_bid_cents)
           setBidCount(row.bid_count)
           setStatus(row.status)
           setEndsAt(row.ends_at)
+          setReserveMet(row.reserve_met)
         },
       )
       .on(
@@ -214,7 +218,14 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
           <p className="text-sm text-slate-500">{currentBid === null ? 'Starting bid' : 'Current bid'}</p>
           <p className="text-4xl font-extrabold text-[#0E4D5C]">{formatCents(currentBid ?? listing.startingPriceCents)}</p>
           <p className="text-sm text-slate-500 mt-1">
-            {bidCount} {bidCount === 1 ? 'bid' : 'bids'}
+            {bidCount} {bidCount === 1 ? 'bid' : 'bids'} ·{' '}
+            {!listing.hasReserve ? (
+              <span>No reserve</span>
+            ) : reserveMet ? (
+              <span className="font-semibold text-green-700">Reserve met</span>
+            ) : (
+              <span className="font-semibold text-amber-700">Reserve not met</span>
+            )}
           </p>
         </div>
         {left && (
@@ -234,7 +245,11 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
           }`}
         >
           {youreWinning ? <Trophy className="w-4 h-4" /> : <Gavel className="w-4 h-4" />}
-          {youreWinning ? "You're the highest bidder" : "You've been outbid"}
+          {youreWinning
+            ? listing.hasReserve && !reserveMet
+              ? "You're the highest bidder, but the reserve isn't met yet"
+              : "You're the highest bidder"
+            : "You've been outbid"}
         </div>
       )}
 
@@ -256,7 +271,11 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
         </div>
       ) : ended ? (
         <p className="text-sm text-slate-600">
-          {status === 'active' ? 'This auction has ended. The winner will be notified shortly.' : 'This auction is closed.'}
+          {listing.hasReserve && !reserveMet
+            ? "This auction ended without meeting the seller's reserve, so the item didn't sell."
+            : status === 'active'
+              ? 'This auction has ended. The winner will be notified shortly.'
+              : 'This auction is closed.'}
         </p>
       ) : userId === undefined ? (
         <div className="h-24 rounded-xl bg-slate-100 animate-pulse" />

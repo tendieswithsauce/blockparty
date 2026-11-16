@@ -151,7 +151,7 @@ export default function ListingsPage() {
                         : 'bg-[#0E4D5C] text-white'
                     }`}
                   >
-                    {item.listing_type === 'auction' ? 'Active Auction' : 'Buy It Now'}
+                    {item.listing_type === 'auction' ? 'Active Auction' : 'Set price'}
                   </span>
                 </div>
 

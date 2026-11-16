@@ -36,13 +36,19 @@ type MyListing = {
   current_bid_cents: number | null
   bid_count: number
   ends_at: string | null
+  has_reserve: boolean
+  reserve_met: boolean
+  reserve: { reserve_cents: number } | null
 }
 
 type MyBid = {
   id: number
+  listing_id: number
   amount_cents: number
   created_at: string
   listing: { id: number; title: string; current_bid_cents: number | null; ends_at: string | null; status: string } | null
+  /** Worked out when loading (needs the clock). */
+  state: 'winning' | 'outbid' | 'won' | 'ended'
 }
 
 type MyOrder = {
@@ -85,6 +91,13 @@ const STATUS_LABELS: Record<string, string> = {
   refunded: 'Refunded',
 }
 
+const BID_STATE_LABELS: Record<MyBid['state'], string> = {
+  winning: 'Winning',
+  outbid: 'Outbid',
+  won: 'Won',
+  ended: 'Ended',
+}
+
 function listingPrice(l: MyListing) {
   if (l.listing_type === 'fixed') return formatCents(l.buy_now_price_cents ?? 0)
   return formatCents(l.current_bid_cents ?? l.starting_price_cents ?? 0)
@@ -111,15 +124,15 @@ export default function DashboardPage() {
       supabase.from('profiles').select('full_name, area_id, stripe_payment_method_id, area:areas(name, city)').eq('id', user.id).single(),
       supabase
         .from('listings')
-        .select('id, title, listing_type, status, image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at')
+        .select('id, title, listing_type, status, image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, reserve:listing_reserves(reserve_cents)')
         .eq('seller_id', user.id)
         .order('created_at', { ascending: false }),
       supabase
         .from('bids')
-        .select('id, amount_cents, created_at, listing:listings!bids_listing_id_fkey(id, title, current_bid_cents, ends_at, status)')
+        .select('id, listing_id, amount_cents, created_at, listing:listings!bids_listing_id_fkey(id, title, current_bid_cents, ends_at, status)')
         .eq('bidder_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(20),
+        .limit(50),
       supabase
         .from('transactions')
         .select(ORDER_COLUMNS)
@@ -137,14 +150,30 @@ export default function DashboardPage() {
     ])
 
     const profile = profileRes.data
+    const purchases = (purchasesRes.data ?? []) as unknown as MyOrder[]
+    // One row per auction (your latest bid is your highest), with where it stands.
+    const now = Date.now()
+    const seen = new Set<number>()
+    const bids: MyBid[] = []
+    for (const b of (bidsRes.data ?? []) as unknown as Omit<MyBid, 'state'>[]) {
+      if (seen.has(b.listing_id)) continue
+      seen.add(b.listing_id)
+      const l = b.listing
+      const live = l && l.status === 'active' && (!l.ends_at || new Date(l.ends_at).getTime() > now)
+      const state: MyBid['state'] = live
+        ? l.current_bid_cents === b.amount_cents ? 'winning' : 'outbid'
+        : l && purchases.some((p) => p.listing_id === l.id) ? 'won' : 'ended'
+      bids.push({ ...b, state })
+      if (bids.length === 20) break
+    }
     setData({
       firstName: profile?.full_name?.split(' ')[0] ?? '',
       areaId: profile?.area_id ?? null,
       area: (profile?.area as { name: string; city: string } | null) ?? null,
       hasCard: Boolean(profile?.stripe_payment_method_id),
       listings: (listingsRes.data ?? []) as MyListing[],
-      bids: (bidsRes.data ?? []) as unknown as MyBid[],
-      purchases: (purchasesRes.data ?? []) as unknown as MyOrder[],
+      bids,
+      purchases,
       sales: (salesRes.data ?? []) as unknown as MyOrder[],
     })
   }, [])
@@ -216,7 +245,7 @@ export default function DashboardPage() {
       done: Boolean(data?.hasCard),
       icon: CreditCard,
       title: 'Add a payment method',
-      body: 'Needed to bid or buy. You are only charged when you win or use Buy Now.',
+      body: 'Needed to bid or buy. You are only charged after you meet the seller and accept the item.',
       action: (
         <Link href="/profile#payment-method" className="px-4 py-2 rounded-full bg-[#0E4D5C] text-white text-sm font-semibold hover:bg-[#0b3f4b]">
           Add payment method
@@ -390,8 +419,8 @@ export default function DashboardPage() {
                     <p className="text-[#0E4D5C] font-bold mt-1">{listingPrice(l)}</p>
                     <p className="text-xs text-slate-500 mt-1">
                       {l.listing_type === 'auction'
-                        ? `${l.bid_count} ${l.bid_count === 1 ? 'bid' : 'bids'}${l.ends_at ? ` · ends ${new Date(l.ends_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}` : ''}`
-                        : 'Buy Now'}
+                        ? `${l.bid_count} ${l.bid_count === 1 ? 'bid' : 'bids'}${l.ends_at ? ` · ends ${new Date(l.ends_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}` : ''}${l.reserve ? ` · reserve ${formatCents(l.reserve.reserve_cents)}${l.reserve_met ? ' (met)' : ''}` : ' · no reserve'}`
+                        : 'Set price'}
                     </p>
                   </div>
                 </li>
@@ -432,11 +461,17 @@ export default function DashboardPage() {
                     <span className="font-medium line-clamp-1">{b.listing?.title ?? 'Listing'}</span>
                     <span className="shrink-0">
                       {formatCents(b.amount_cents)}
-                      {b.listing?.current_bid_cents === b.amount_cents ? (
-                        <span className="ml-2 text-green-700 font-semibold">Winning</span>
-                      ) : (
-                        <span className="ml-2 text-amber-700 font-semibold">Outbid</span>
-                      )}
+                      <span
+                        className={`ml-2 font-semibold ${
+                          b.state === 'winning' || b.state === 'won'
+                            ? 'text-green-700'
+                            : b.state === 'outbid'
+                              ? 'text-amber-700'
+                              : 'text-slate-500'
+                        }`}
+                      >
+                        {BID_STATE_LABELS[b.state]}
+                      </span>
                     </span>
                   </li>
                 ))}

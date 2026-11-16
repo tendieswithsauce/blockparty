@@ -20,11 +20,11 @@ export function TextField({
   )
 }
 
-export function SubmitButton({ pending, children }: { pending: boolean; children: string }) {
+export function SubmitButton({ pending, disabled, children }: { pending: boolean; disabled?: boolean; children: string }) {
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       className="w-full py-3 rounded-full bg-[#0E4D5C] text-white font-bold shadow-sm hover:bg-[#093641] transition disabled:opacity-60 disabled:cursor-not-allowed"
     >
       {pending ? 'Please wait…' : children}

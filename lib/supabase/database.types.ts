@@ -121,6 +121,20 @@ export type Database = {
           },
         ]
       }
+      listing_reserves: {
+        Row: { created_at: string; listing_id: number; reserve_cents: number }
+        Insert: { created_at?: string; listing_id: number; reserve_cents: number }
+        Update: { created_at?: string; listing_id?: number; reserve_cents?: number }
+        Relationships: [
+          {
+            foreignKeyName: "listing_reserves_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: true
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       listings: {
         Row: {
           area_id: string
@@ -130,9 +144,11 @@ export type Database = {
           current_bid_cents: number | null
           description: string | null
           ends_at: string | null
+          has_reserve: boolean
           id: number
           image_paths: string[]
           listing_type: Database["public"]["Enums"]["listing_type"]
+          reserve_met: boolean
           seller_id: string
           starting_price_cents: number | null
           status: Database["public"]["Enums"]["listing_status"]
@@ -148,9 +164,11 @@ export type Database = {
           current_bid_cents?: number | null
           description?: string | null
           ends_at?: string | null
+          has_reserve?: boolean
           id?: number
           image_paths?: string[]
           listing_type: Database["public"]["Enums"]["listing_type"]
+          reserve_met?: boolean
           seller_id: string
           starting_price_cents?: number | null
           status?: Database["public"]["Enums"]["listing_status"]
@@ -166,9 +184,11 @@ export type Database = {
           current_bid_cents?: number | null
           description?: string | null
           ends_at?: string | null
+          has_reserve?: boolean
           id?: number
           image_paths?: string[]
           listing_type?: Database["public"]["Enums"]["listing_type"]
+          reserve_met?: boolean
           seller_id?: string
           starting_price_cents?: number | null
           status?: Database["public"]["Enums"]["listing_status"]
@@ -260,7 +280,8 @@ export type Database = {
           stripe_payment_method_id: string | null
           stripe_payouts_enabled: boolean
           updated_at: string
-          username: string | null
+          username: string
+          username_changed_at: string | null
           welcome_email_sent_at: string | null
         }
         Insert: {
@@ -277,7 +298,8 @@ export type Database = {
           stripe_payment_method_id?: string | null
           stripe_payouts_enabled?: boolean
           updated_at?: string
-          username?: string | null
+          username?: string
+          username_changed_at?: string | null
           welcome_email_sent_at?: string | null
         }
         Update: {
@@ -294,7 +316,8 @@ export type Database = {
           stripe_payment_method_id?: string | null
           stripe_payouts_enabled?: boolean
           updated_at?: string
-          username?: string | null
+          username?: string
+          username_changed_at?: string | null
           welcome_email_sent_at?: string | null
         }
         Relationships: [
@@ -373,6 +396,12 @@ export type Database = {
           },
         ]
       }
+      username_blocked_terms: {
+        Row: { term: string }
+        Insert: { term: string }
+        Update: { term?: string }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -409,6 +438,7 @@ export type Database = {
         Args: { p_code: string; p_seller_id: string; p_transaction_id: number }
         Returns: boolean
       }
+      check_username: { Args: { p_name: string }; Returns: string | null }
       choose_meetup_time: {
         Args: { p_time: string | null; p_transaction_id: number }
         Returns: undefined
@@ -427,18 +457,32 @@ export type Database = {
         Args: { p_transaction_id: number; p_transfer_id: string | null }
         Returns: undefined
       }
+      create_listing: {
+        Args: {
+          p_area_id: string
+          p_description: string | null
+          p_duration_days?: number | null
+          p_image_paths: string[]
+          p_listing_type: Database["public"]["Enums"]["listing_type"]
+          p_price_cents: number
+          p_reserve_cents?: number | null
+          p_title: string
+        }
+        Returns: number
+      }
       distance_km: {
         Args: { lat1: number; lat2: number; lng1: number; lng2: number }
         Returns: number
       }
       expired_orders: { Args: never; Returns: number[] }
+      generate_username: { Args: never; Returns: string }
       get_handoff_code: { Args: { p_transaction_id: number }; Returns: string }
       listing_photos_ok: { Args: { p_paths: string[] }; Returns: boolean }
       order_party_names: {
         Args: { p_transaction_id: number }
         Returns: {
-          buyer_first_name: string
-          seller_first_name: string
+          buyer_name: string
+          seller_name: string
         }[]
       }
       place_bid: {
@@ -469,6 +513,7 @@ export type Database = {
         }[]
       }
       seller_can_receive_payouts: { Args: never; Returns: boolean }
+      set_username: { Args: { p_name: string }; Returns: string }
       suggest_meetup_spots: {
         Args: { p_limit?: number; p_transaction_id: number }
         Returns: {

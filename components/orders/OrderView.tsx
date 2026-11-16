@@ -97,7 +97,7 @@ export function OrderView({ id }: { id: number }) {
         ? supabase.rpc('suggest_meetup_spots', { p_transaction_id: id, p_limit: 4 })
         : Promise.resolve({ data: null }),
     ])
-    setNames({ buyer: n?.[0]?.buyer_first_name || 'The buyer', seller: n?.[0]?.seller_first_name || 'The seller' })
+    setNames({ buyer: n?.[0]?.buyer_name || 'The buyer', seller: n?.[0]?.seller_name || 'The seller' })
     setCode((codeRes.data as string | null) ?? null)
     setSuggestions((suggestRes.data as Suggestion[] | null) ?? [])
   }, [id])
@@ -195,7 +195,7 @@ export function OrderView({ id }: { id: number }) {
             <div className={card}>
               <p className="font-semibold">Sold! Waiting a few minutes before it&apos;s final</p>
               <p className="text-sm text-slate-600">
-                Buyers can cancel a Buy Now purchase for {BUY_NOW_CANCEL_WINDOW_SECONDS / 60} minutes. You can suggest a meetup
+                Buyers can cancel a set-price purchase for {BUY_NOW_CANCEL_WINDOW_SECONDS / 60} minutes. You can suggest a meetup
                 once that&apos;s passed.
               </p>
             </div>
