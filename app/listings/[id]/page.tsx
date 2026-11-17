@@ -13,6 +13,7 @@ import { SiteHeader } from '@/components/SiteHeader'
 import { PhotoGallery } from '@/components/listing/PhotoGallery'
 import { BidPanel } from '@/components/listing/BidPanel'
 import { BuyNowPanel } from '@/components/listing/BuyNowPanel'
+import { WatchButton } from '@/components/listing/WatchButton'
 
 export default function ListingPage({ params }: PageProps<'/listings/[id]'>) {
   return (
@@ -43,7 +44,7 @@ async function ListingContent({ id }: { id: string }) {
   const { data: listing } = await supabase
     .from('listings')
     .select(
-      'id, seller_id, title, description, listing_type, status, condition, area:areas(name, city), category:categories!category_id(id, name, parent:parent_id(id, name)), image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, created_at',
+      'id, seller_id, title, description, listing_type, status, condition, area:areas(name, city), category:categories!category_id(id, name, parent:parent_id(id, name)), image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, watch_count, created_at',
     )
     .eq('id', listingId)
     .maybeSingle()
@@ -73,13 +74,21 @@ async function ListingContent({ id }: { id: string }) {
 
       <div className="space-y-6">
         <div>
-          <span
-            className={`inline-block px-3 py-1 text-xs font-bold rounded-full text-white ${
-              listing.listing_type === 'auction' ? 'bg-[#F26B5B]' : 'bg-[#0E4D5C]'
-            }`}
-          >
-            {listing.listing_type === 'auction' ? 'Auction' : 'Set price'}
-          </span>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span
+              className={`inline-block px-3 py-1 text-xs font-bold rounded-full text-white ${
+                listing.listing_type === 'auction' ? 'bg-[#F26B5B]' : 'bg-[#0E4D5C]'
+              }`}
+            >
+              {listing.listing_type === 'auction' ? 'Auction' : 'Set price'}
+            </span>
+            <WatchButton
+              listingId={listing.id}
+              sellerId={listing.seller_id}
+              watchCount={listing.watch_count}
+              canWatch={listing.status === 'active'}
+            />
+          </div>
           <h1 className="text-3xl font-extrabold tracking-tight mt-3">{listing.title}</h1>
           <p className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm text-slate-500 mt-2">
             <Tag className="w-4 h-4 text-[#0E4D5C]" />

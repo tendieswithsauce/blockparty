@@ -7,17 +7,20 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { signOut } from '@/app/auth/actions'
+import { NotificationBell } from '@/components/NotificationBell'
 
-type AuthState = 'loading' | 'signed-in' | 'signed-out'
+type AuthState = 'loading' | 'signed-out' | { userId: string }
 
 export function AuthNav() {
   const [state, setState] = useState<AuthState>('loading')
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getUser().then(({ data }) => setState(data.user ? 'signed-in' : 'signed-out'))
+    supabase.auth.getUser().then(({ data }) => setState(data.user ? { userId: data.user.id } : 'signed-out'))
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setState(session ? 'signed-in' : 'signed-out')
+      setState((prev) =>
+        !session ? 'signed-out' : typeof prev === 'object' && prev.userId === session.user.id ? prev : { userId: session.user.id },
+      )
     })
     return () => sub.subscription.unsubscribe()
   }, [])
@@ -44,6 +47,7 @@ export function AuthNav() {
 
   return (
     <div className="flex items-center gap-4">
+      <NotificationBell userId={state.userId} />
       <Link href="/dashboard" className="hover:text-[#F26B5B] transition">
         Dashboard
       </Link>

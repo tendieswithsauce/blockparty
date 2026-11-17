@@ -17,6 +17,7 @@ export default function ProfilePage() {
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [areaId, setAreaId] = useState<string>('')
+  const [emailAlerts, setEmailAlerts] = useState(true)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [statusMsg, setStatusMsg] = useState('')
@@ -29,7 +30,7 @@ export default function ProfilePage() {
         // The profile row is created automatically on sign-up (DB trigger).
         const { data } = await supabase
           .from('profiles')
-          .select('username, username_changed_at, full_name, phone, area_id')
+          .select('username, username_changed_at, full_name, phone, area_id, email_alerts')
           .eq('id', user.id)
           .single()
         if (data) {
@@ -42,6 +43,7 @@ export default function ProfilePage() {
           setFullName(data.full_name || '')
           setPhone(data.phone || '')
           setAreaId(data.area_id || '')
+          setEmailAlerts(data.email_alerts)
         }
       }
       setLoading(false)
@@ -81,6 +83,7 @@ export default function ProfilePage() {
         full_name: fullName || null,
         phone: phone || null,
         area_id: areaId || null,
+        email_alerts: emailAlerts,
       })
       .eq('id', user.id)
 
@@ -157,6 +160,24 @@ export default function ProfilePage() {
               Used to suggest meetup spots that are fair to you and the other person. Your exact address is never shared.
             </p>
           </div>
+
+          <fieldset>
+            <legend className="block text-sm font-medium text-gray-700">Email</legend>
+            <label className="mt-1 flex items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={emailAlerts}
+                onChange={(e) => setEmailAlerts(e.target.checked)}
+                className="mt-0.5 w-4 h-4"
+              />
+              <span>
+                Email me when I&apos;m outbid and about listings I&apos;m watching
+                <span className="block text-xs text-gray-500">
+                  You&apos;ll always get emails about your own orders: wins, sales, meetups and payments.
+                </span>
+              </span>
+            </label>
+          </fieldset>
 
           <button
             type="submit"

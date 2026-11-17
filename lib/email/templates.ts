@@ -5,7 +5,17 @@
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
-function layout({ heading, body, cta }: { heading: string; body: string; cta?: { label: string; url: string } }) {
+function layout({
+  heading,
+  body,
+  cta,
+  note = '',
+}: {
+  heading: string
+  body: string
+  cta?: { label: string; url: string }
+  note?: string
+}) {
   const button = cta
     ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px;"><tr>
         <td align="center" style="background-color:#F26B5B;border-radius:999px;">
@@ -28,6 +38,7 @@ function layout({ heading, body, cta }: { heading: string; body: string; cta?: {
   <h1 style="margin:0 0 12px;font-size:24px;line-height:1.3;font-weight:800;color:#0E4D5C;">${esc(heading)}</h1>
   ${body}
   ${button}
+  ${note}
 </td></tr>
 <tr><td align="center" style="padding-top:24px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#94A3B8;">
   Blockparty &middot; Buy, sell and bid with your neighbours<br>Meet at a safe public spot. Pay only when you accept the item.
@@ -37,6 +48,46 @@ function layout({ heading, body, cta }: { heading: string; body: string; cta?: {
 
 const p = (text: string) =>
   `<p style="margin:0 0 20px;font-size:16px;line-height:1.6;color:#475569;">${text}</p>`
+
+// Kinds the user can switch off on their profile (matches public.notify()).
+const OPTIONAL_KINDS = new Set(['outbid', 'watch_auction', 'watch_ending', 'watch_price_drop'])
+
+const CTA_LABELS: Record<string, string> = {
+  outbid: 'Bid again',
+  watch_auction: 'See the auction',
+  watch_ending: 'See the auction',
+  watch_price_drop: 'See the listing',
+  payment_failed: 'Check my payment method',
+  auction_unsold: 'Go to my dashboard',
+}
+
+/** Email version of an in-app notification (title + one paragraph + button). */
+export function notificationEmail({
+  kind,
+  title,
+  body,
+  link,
+  siteUrl,
+}: {
+  kind: string
+  title: string
+  body: string | null
+  link: string | null
+  siteUrl: string
+}) {
+  const url = link ? `${siteUrl}${link}` : `${siteUrl}/dashboard`
+  const label = CTA_LABELS[kind] ?? (link?.startsWith('/orders/') ? 'Open my order' : 'Open Blockparty')
+  const optOut = OPTIONAL_KINDS.has(kind)
+    ? `<p style="margin:16px 0 0;font-size:13px;line-height:1.5;color:#94A3B8;">You can turn off outbid and watchlist emails on your <a href="${esc(`${siteUrl}/profile`)}" style="color:#0E4D5C;">profile</a>.</p>`
+    : ''
+  return {
+    subject: title,
+    html: layout({ heading: title, body: body ? p(esc(body)) : '', cta: { label, url }, note: optOut }),
+    text: `${title}\n\n${body ? `${body}\n\n` : ''}${label}: ${url}\n${
+      OPTIONAL_KINDS.has(kind) ? `\nTurn off outbid and watchlist emails: ${siteUrl}/profile\n` : ''
+    }`,
+  }
+}
 
 export function welcomeEmail({ firstName, siteUrl }: { firstName: string | null; siteUrl: string }) {
   const hi = firstName ? `Welcome, ${esc(firstName)}!` : 'Welcome to Blockparty!'

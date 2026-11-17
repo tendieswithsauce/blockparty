@@ -160,6 +160,7 @@ export type Database = {
           buy_now_price_cents: number | null
           category_id: string
           condition: ListingCondition
+          converted_at: string | null
           created_at: string
           current_bid_cents: number | null
           description: string | null
@@ -177,6 +178,7 @@ export type Database = {
           status: Database["public"]["Enums"]["listing_status"]
           title: string
           updated_at: string
+          watch_count: number
           winning_bid_id: number | null
         }
         Insert: {
@@ -185,6 +187,7 @@ export type Database = {
           buy_now_price_cents?: number | null
           category_id: string
           condition: ListingCondition
+          converted_at?: string | null
           created_at?: string
           current_bid_cents?: number | null
           description?: string | null
@@ -202,6 +205,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["listing_status"]
           title: string
           updated_at?: string
+          watch_count?: number
           winning_bid_id?: number | null
         }
         Update: {
@@ -210,6 +214,7 @@ export type Database = {
           buy_now_price_cents?: number | null
           category_id?: string
           condition?: ListingCondition
+          converted_at?: string | null
           created_at?: string
           current_bid_cents?: number | null
           description?: string | null
@@ -227,6 +232,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["listing_status"]
           title?: string
           updated_at?: string
+          watch_count?: number
           winning_bid_id?: number | null
         }
         Relationships: [
@@ -305,12 +311,75 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          dedupe_key: string | null
+          email_attempts: number
+          email_claimed_at: string | null
+          email_status: string
+          emailed_at: string | null
+          id: number
+          kind: string
+          link: string | null
+          listing_id: number | null
+          read_at: string | null
+          title: string
+          transaction_id: number | null
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          dedupe_key?: string | null
+          email_attempts?: number
+          email_claimed_at?: string | null
+          email_status?: string
+          emailed_at?: string | null
+          id?: never
+          kind: string
+          link?: string | null
+          listing_id?: number | null
+          read_at?: string | null
+          title: string
+          transaction_id?: number | null
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          dedupe_key?: string | null
+          email_attempts?: number
+          email_claimed_at?: string | null
+          email_status?: string
+          emailed_at?: string | null
+          id?: never
+          kind?: string
+          link?: string | null
+          listing_id?: number | null
+          read_at?: string | null
+          title?: string
+          transaction_id?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           address: Json | null
           area_id: string | null
           created_at: string
           email: string | null
+          email_alerts: boolean
           full_name: string | null
           id: string
           phone: string | null
@@ -329,6 +398,7 @@ export type Database = {
           area_id?: string | null
           created_at?: string
           email?: string | null
+          email_alerts?: boolean
           full_name?: string | null
           id: string
           phone?: string | null
@@ -347,6 +417,7 @@ export type Database = {
           area_id?: string | null
           created_at?: string
           email?: string | null
+          email_alerts?: boolean
           full_name?: string | null
           id?: string
           phone?: string | null
@@ -442,6 +513,32 @@ export type Database = {
         Update: { term?: string }
         Relationships: []
       }
+      watchlist: {
+        Row: {
+          created_at: string
+          listing_id: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          listing_id: number
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          listing_id?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchlist_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -474,6 +571,17 @@ export type Database = {
         Args: { p_transaction_id: number }
         Returns: undefined
       }
+      claim_notification_emails: {
+        Args: { p_limit?: number }
+        Returns: {
+          body: string | null
+          email: string | null
+          id: number
+          kind: string
+          link: string | null
+          title: string
+        }[]
+      }
       check_handoff_code: {
         Args: { p_code: string; p_seller_id: string; p_transaction_id: number }
         Returns: boolean
@@ -495,6 +603,15 @@ export type Database = {
       }
       complete_order: {
         Args: { p_transaction_id: number; p_transfer_id: string | null }
+        Returns: undefined
+      }
+      convert_to_auction: {
+        Args: {
+          p_duration_days: number
+          p_listing_id: number
+          p_reserve_cents?: number | null
+          p_starting_price_cents: number
+        }
         Returns: undefined
       }
       create_listing: {

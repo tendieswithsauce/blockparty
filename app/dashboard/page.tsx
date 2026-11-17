@@ -8,6 +8,7 @@ import {
   Circle,
   CreditCard,
   Gavel,
+  Heart,
   Landmark,
   MapPin,
   Package,
@@ -21,6 +22,7 @@ import { formatMeetupTime } from '@/lib/orders'
 import { formatCents } from '@/lib/money'
 import { SiteHeader } from '@/components/SiteHeader'
 import { CreateListingModal } from '@/components/dashboard/CreateListingModal'
+import { ConvertToAuctionModal } from '@/components/dashboard/ConvertToAuctionModal'
 import { PayoutDashboardButton, SetUpPayoutsButton } from '@/components/dashboard/PayoutButton'
 import { getPayoutStatus } from '@/app/payouts/actions'
 import type { PayoutStatus } from '@/lib/stripe/connect'
@@ -39,6 +41,22 @@ type MyListing = {
   has_reserve: boolean
   reserve_met: boolean
   reserve: { reserve_cents: number } | null
+  watch_count: number
+  converted_at: string | null
+}
+
+type Watched = {
+  listing_id: number
+  /** Null once it's no longer public (sold or taken down). */
+  listing: {
+    id: number
+    title: string
+    listing_type: 'fixed' | 'auction'
+    status: string
+    buy_now_price_cents: number | null
+    display_price_cents: number | null
+    ends_at: string | null
+  } | null
 }
 
 type MyBid = {
@@ -75,6 +93,7 @@ type DashboardData = {
   bids: MyBid[]
   purchases: MyOrder[]
   sales: MyOrder[]
+  watching: Watched[]
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -108,6 +127,7 @@ export default function DashboardPage() {
   const [payouts, setPayouts] = useState<PayoutStatus | null | undefined>(undefined)
   const [showModal, setShowModal] = useState(false)
   const [showPayoutPrompt, setShowPayoutPrompt] = useState(false)
+  const [converting, setConverting] = useState<MyListing | null>(null)
   const payoutReturn = useRef<string | null | undefined>(undefined)
   const [notice, setNotice] = useState<{ kind: 'success' | 'info' | 'error'; text: string } | null>(null)
 
@@ -120,11 +140,11 @@ export default function DashboardPage() {
       return
     }
 
-    const [profileRes, listingsRes, bidsRes, purchasesRes, salesRes] = await Promise.all([
+    const [profileRes, listingsRes, bidsRes, purchasesRes, salesRes, watchRes] = await Promise.all([
       supabase.from('profiles').select('full_name, area_id, stripe_payment_method_id, area:areas(name, city)').eq('id', user.id).single(),
       supabase
         .from('listings')
-        .select('id, title, listing_type, status, image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, reserve:listing_reserves(reserve_cents)')
+        .select('id, title, listing_type, status, image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, watch_count, converted_at, reserve:listing_reserves(reserve_cents)')
         .eq('seller_id', user.id)
         .order('created_at', { ascending: false }),
       supabase
@@ -147,6 +167,11 @@ export default function DashboardPage() {
         .in('status', ['authorized', 'completed', 'refunded'])
         .order('created_at', { ascending: false })
         .limit(20),
+      supabase
+        .from('watchlist')
+        .select('listing_id, listing:listings(id, title, listing_type, status, buy_now_price_cents, display_price_cents, ends_at)')
+        .order('created_at', { ascending: false })
+        .limit(30),
     ])
 
     const profile = profileRes.data
@@ -175,6 +200,7 @@ export default function DashboardPage() {
       bids,
       purchases,
       sales: (salesRes.data ?? []) as unknown as MyOrder[],
+      watching: (watchRes.data ?? []) as unknown as Watched[],
     })
   }, [])
 
@@ -421,7 +447,17 @@ export default function DashboardPage() {
                       {l.listing_type === 'auction'
                         ? `${l.bid_count} ${l.bid_count === 1 ? 'bid' : 'bids'}${l.ends_at ? ` · ends ${new Date(l.ends_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}` : ''}${l.reserve ? ` · reserve ${formatCents(l.reserve.reserve_cents)}${l.reserve_met ? ' (met)' : ''}` : ' · no reserve'}`
                         : 'Set price'}
+                      {l.watch_count > 0 && ` · ${l.watch_count} watching`}
                     </p>
+                    {l.listing_type === 'fixed' && l.status === 'active' && !l.converted_at && (
+                      <button
+                        type="button"
+                        onClick={() => setConverting(l)}
+                        className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0E4D5C] hover:text-[#F26B5B]"
+                      >
+                        <Gavel className="w-4 h-4" /> Switch to auction
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}
@@ -500,6 +536,51 @@ export default function DashboardPage() {
             )}
           </section>
         </div>
+
+        {/* Watchlist */}
+        {data && data.watching.length > 0 && (
+          <section className="bg-white border rounded-2xl p-6 shadow-sm">
+            <h2 className="text-lg font-bold mb-1 flex items-center gap-2">
+              <Heart className="w-5 h-5 text-[#F26B5B]" /> Watching
+            </h2>
+            <p className="text-sm text-slate-500 mb-4">
+              We&apos;ll tell you if the price drops, it becomes an auction, or its auction is about to end.
+            </p>
+            <ul className="divide-y">
+              {data.watching.map((w) => (
+                <li key={w.listing_id} className="py-3 flex justify-between items-center gap-4 text-sm">
+                  {w.listing && w.listing.status === 'active' ? (
+                    <Link href={`/listings/${w.listing.id}`} className="font-medium line-clamp-1 hover:text-[#F26B5B]">
+                      {w.listing.title}
+                    </Link>
+                  ) : (
+                    <span className="text-slate-400 line-clamp-1">{w.listing?.title ?? 'No longer available'}</span>
+                  )}
+                  <span className="shrink-0 flex items-center gap-3">
+                    {w.listing?.status === 'active' && (
+                      <span>
+                        {formatCents(w.listing.display_price_cents ?? 0)}
+                        <span className="ml-2 text-xs font-semibold text-slate-500">
+                          {w.listing.listing_type === 'auction' ? 'Auction' : 'Set price'}
+                        </span>
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await createClient().from('watchlist').delete().eq('listing_id', w.listing_id)
+                        load()
+                      }}
+                      className="text-xs font-semibold text-slate-500 hover:text-[#F26B5B]"
+                    >
+                      Remove
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
 
       {showPayoutPrompt && (
@@ -519,6 +600,23 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {converting && (
+        <ConvertToAuctionModal
+          listing={{
+            id: converting.id,
+            title: converting.title,
+            priceCents: converting.buy_now_price_cents ?? 0,
+            watchCount: converting.watch_count,
+          }}
+          onClose={() => setConverting(null)}
+          onConverted={() => {
+            setConverting(null)
+            setNotice({ kind: 'success', text: `${converting.title} is now an auction.` })
+            load()
+          }}
+        />
       )}
 
       {showModal && (
