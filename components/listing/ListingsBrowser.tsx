@@ -18,7 +18,7 @@ import { dollarsToCents, formatCents } from '@/lib/money'
 import type { ListingCondition, ListingSort } from '@/lib/supabase/database.types'
 
 const RESULT_COLUMNS =
-  'id, title, listing_type, condition, image_paths, display_price_cents, ends_at, has_reserve, area:areas(name, city), category:categories!category_id(name, parent:parent_id(name))'
+  'id, title, listing_type, condition, image_paths, display_price_cents, ends_at, has_reserve, silent, charity:charities(name), area:areas(name, city), category:categories!category_id(name, parent:parent_id(name))'
 
 type Result = {
   id: number
@@ -29,6 +29,8 @@ type Result = {
   display_price_cents: number | null
   ends_at: string | null
   has_reserve: boolean
+  silent: boolean
+  charity: { name: string } | null
   area: { name: string; city: string } | null
   category: CategoryRef
 }
@@ -410,16 +412,21 @@ export function ListingsBrowser() {
                     item.listing_type === 'auction' ? 'bg-[#F26B5B]' : 'bg-[#0E4D5C]'
                   }`}
                 >
-                  {item.listing_type === 'auction' ? 'Auction' : 'Set price'}
+                  {item.silent ? 'Silent auction' : item.listing_type === 'auction' ? 'Auction' : 'Set price'}
                 </span>
+                {item.charity && (
+                  <span className="absolute bottom-3 left-3 max-w-[85%] truncate px-2.5 py-1 text-xs font-semibold rounded-full bg-white/95 text-[#0E4D5C] shadow-sm">
+                    ♥ {item.charity.name}
+                  </span>
+                )}
               </div>
 
               <div className="p-4 flex-1 flex flex-col gap-1">
                 <h3 className="font-bold text-slate-900 text-base truncate group-hover:text-[#0E4D5C]">{item.title}</h3>
                 <p className="text-sm text-slate-700">
-                  {item.listing_type === 'auction' ? 'Current bid ' : ''}
+                  {item.silent ? 'Bids from ' : item.listing_type === 'auction' ? 'Current bid ' : ''}
                   <span className="font-extrabold text-slate-900">{formatCents(item.display_price_cents ?? 0)}</span>
-                  {item.listing_type === 'auction' && item.has_reserve && (
+                  {item.listing_type === 'auction' && item.has_reserve && !item.silent && (
                     <span className="text-xs text-slate-500"> · reserve</span>
                   )}
                 </p>

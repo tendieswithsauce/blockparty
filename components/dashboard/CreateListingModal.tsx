@@ -12,6 +12,8 @@ import { CONDITIONS } from '@/lib/categories'
 import type { ListingCondition } from '@/lib/supabase/database.types'
 import { MAX_PRICE_CENTS, dollarsToCents, formatCents } from '@/lib/money'
 import { MIN_PRICE_CENTS, PLATFORM_FEE_LABEL, sellerPayoutCents } from '@/lib/fees'
+import { checkMyNewListing } from '@/app/listings/actions'
+import type { ModerationResult } from '@/lib/moderation/check-listing'
 
 const AUCTION_DURATIONS_DAYS = [1, 3, 5, 7] as const
 const MAX_PHOTOS = 8
@@ -34,7 +36,8 @@ export function CreateListingModal({
 }: {
   defaultArea?: string
   onClose: () => void
-  onCreated: () => void
+  /** 'approved' = live now; 'held' = waiting for a person to review it. */
+  onCreated: (result: ModerationResult) => void
 }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -169,7 +172,7 @@ export function CreateListingModal({
 
     // 2. Create the listing (and its secret reserve) in one call.
     setStatus('Publishing…')
-    const { error: insertError } = await supabase.rpc('create_listing', {
+    const { data: newId, error: insertError } = await supabase.rpc('create_listing', {
       p_title: title.trim(),
       p_description: description.trim() || null,
       p_listing_type: listingType,
@@ -196,8 +199,12 @@ export function CreateListingModal({
       return
     }
 
+    // 3. The automatic check (a few seconds). If it fails, it runs again
+    //    in the background and the listing goes live once it passes.
+    setStatus('Checking your listing…')
+    const result = await checkMyNewListing(newId).catch((): ModerationResult => 'error')
     setSaving(false)
-    onCreated()
+    onCreated(result)
   }
 
   const inputClass =

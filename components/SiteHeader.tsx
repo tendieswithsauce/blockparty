@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { BrandLogo } from '@/components/BrandLogo'
 import { AuthNav } from '@/components/AuthNav'
 
-type Section = 'browse' | 'auctions' | 'how' | null
+type Section = 'browse' | 'auctions' | 'charities' | 'how' | null
 
 export function SiteHeader({ active = null }: { active?: Section }) {
   const link = (section: Section) =>
@@ -18,6 +18,9 @@ export function SiteHeader({ active = null }: { active?: Section }) {
         </Link>
         <Link href="/listings?type=auction" className={link('auctions')}>
           Active Auctions
+        </Link>
+        <Link href="/charities" className={link('charities')}>
+          Charities
         </Link>
         <Link href="/#how-it-works" className={link('how')}>
           How It Works

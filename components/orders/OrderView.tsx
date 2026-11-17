@@ -16,6 +16,7 @@ import { CANCEL_REASONS, cancelReasonLabel, formatMeetupTime, mapsUrl } from '@/
 import { BUY_NOW_CANCEL_WINDOW_SECONDS } from '@/lib/purchase-rules'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { OrderChat } from '@/components/orders/OrderChat'
+import { OrderReview } from '@/components/orders/OrderReview'
 import { cancelOrder, completeHandoff } from '@/app/orders/actions'
 
 type Spot = {
@@ -180,6 +181,10 @@ export function OrderView({ id }: { id: number }) {
               : `${formatCents(payoutCents)} is on its way to your bank through Stripe.`}
           </p>
         </div>
+      ) : null}
+
+      {order.status === 'completed' ? (
+        <OrderReview orderId={order.id} userId={userId} other={other} pickedUpAt={order.picked_up_at} now={now} />
       ) : order.status === 'canceled' ? (
         <div className={card}>
           <p className="flex items-center gap-2 font-bold">
@@ -251,13 +256,13 @@ export function OrderView({ id }: { id: number }) {
 
           {order.meetup_deadline && (
             <p className="text-xs text-slate-500">
-              Meet by {formatMeetupTime(order.meetup_deadline, tz)}. If the handoff hasn&apos;t happened by then, the order is
-              cancelled and {role === 'buyer' ? 'the hold on your card is released' : "the buyer's hold is released"}.
+              If the handoff hasn&apos;t happened by {formatMeetupTime(order.meetup_deadline, tz)}, the order is cancelled and{' '}
+              {role === 'buyer' ? 'the hold on your card is released' : "the buyer's hold is released"}.
             </p>
           )}
 
           <SafetyTips />
-          <CancelOrder order={order} role={role} onDone={load} />
+          <CancelOrder order={order} role={role} now={now} onDone={load} />
         </>
       )}
     </div>
@@ -515,7 +520,7 @@ function ProposeMeetup({
             aria-label={`Time option ${i + 1}`}
           />
         ))}
-        {deadline && <p className="text-xs text-slate-500">Any time before {formatMeetupTime(deadline.toISOString(), tz)}.</p>}
+        {deadline && <p className="text-xs text-slate-500">Any time before {formatMeetupTime(deadline.toISOString(), tz)}</p>}
       </div>
 
       <label className="block">
@@ -688,12 +693,25 @@ function SafetyTips() {
   )
 }
 
-function CancelOrder({ order, role, onDone }: { order: Order; role: 'buyer' | 'seller'; onDone: () => void }) {
+function CancelOrder({
+  order,
+  role,
+  now,
+  onDone,
+}: {
+  order: Order
+  role: 'buyer' | 'seller'
+  now: number | null
+  onDone: () => void
+}) {
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const reasons = CANCEL_REASONS[role]
+  // A no-show can only be reported once the agreed time has passed; it gives
+  // the other person a strike (unless they tapped "I'm here").
+  const meetupPassed = !!order.meetup_at && now !== null && now >= new Date(order.meetup_at).getTime()
+  const reasons = Object.entries(CANCEL_REASONS[role]).filter(([value]) => meetupPassed || !value.endsWith('_no_show'))
 
   async function confirm() {
     if (!reason) return setError('Choose a reason.')
@@ -738,7 +756,7 @@ function CancelOrder({ order, role, onDone }: { order: Order; role: 'buyer' | 's
               <option value="" disabled>
                 Choose a reason
               </option>
-              {Object.entries(reasons).map(([value, label]) => (
+              {reasons.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>

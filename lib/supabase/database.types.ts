@@ -21,6 +21,7 @@ type TransactionRow = {
   canceled_at: string | null
   canceled_by: string | null
   created_at: string
+  fee_waived: boolean
   handoff_attempts: number
   handoff_code: string | null
   id: number
@@ -141,6 +142,51 @@ export type Database = {
           },
         ]
       }
+      charities: {
+        Row: {
+          approved_at: string | null
+          created_at: string
+          cra_city: string | null
+          cra_legal_name: string | null
+          cra_province: string | null
+          description: string | null
+          id: number
+          name: string
+          owner_id: string
+          slug: string
+          status: 'pending' | 'approved' | 'rejected' | 'suspended'
+          website: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          created_at?: string
+          cra_city?: string | null
+          cra_legal_name?: string | null
+          cra_province?: string | null
+          description?: string | null
+          id?: never
+          name?: string
+          owner_id?: string
+          slug?: string
+          status?: 'pending' | 'approved' | 'rejected' | 'suspended'
+          website?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          created_at?: string
+          cra_city?: string | null
+          cra_legal_name?: string | null
+          cra_province?: string | null
+          description?: string | null
+          id?: never
+          name?: string
+          owner_id?: string
+          slug?: string
+          status?: 'pending' | 'approved' | 'rejected' | 'suspended'
+          website?: string | null
+        }
+        Relationships: []
+      }
       listing_reserves: {
         Row: { created_at: string; listing_id: number; reserve_cents: number }
         Insert: { created_at?: string; listing_id: number; reserve_cents: number }
@@ -161,6 +207,7 @@ export type Database = {
           bid_count: number
           buy_now_price_cents: number | null
           category_id: string
+          charity_id: number | null
           condition: ListingCondition
           converted_at: string | null
           created_at: string
@@ -172,10 +219,15 @@ export type Database = {
           id: number
           image_paths: string[]
           listing_type: Database["public"]["Enums"]["listing_type"]
+          moderated_by: string | null
+          moderation_attempts: number
+          moderation_checked_at: string | null
+          moderation_reason: string | null
           reserve_met: boolean
           review_status: ReviewStatus
           search_vector: unknown
           seller_id: string
+          silent: boolean
           starting_price_cents: number | null
           status: Database["public"]["Enums"]["listing_status"]
           title: string
@@ -188,6 +240,7 @@ export type Database = {
           bid_count?: number
           buy_now_price_cents?: number | null
           category_id: string
+          charity_id?: number | null
           condition: ListingCondition
           converted_at?: string | null
           created_at?: string
@@ -199,10 +252,15 @@ export type Database = {
           id?: number
           image_paths?: string[]
           listing_type: Database["public"]["Enums"]["listing_type"]
+          moderated_by?: string | null
+          moderation_attempts?: number
+          moderation_checked_at?: string | null
+          moderation_reason?: string | null
           reserve_met?: boolean
           review_status?: ReviewStatus
           search_vector?: unknown
           seller_id: string
+          silent?: boolean
           starting_price_cents?: number | null
           status?: Database["public"]["Enums"]["listing_status"]
           title: string
@@ -215,6 +273,7 @@ export type Database = {
           bid_count?: number
           buy_now_price_cents?: number | null
           category_id?: string
+          charity_id?: number | null
           condition?: ListingCondition
           converted_at?: string | null
           created_at?: string
@@ -226,10 +285,15 @@ export type Database = {
           id?: number
           image_paths?: string[]
           listing_type?: Database["public"]["Enums"]["listing_type"]
+          moderated_by?: string | null
+          moderation_attempts?: number
+          moderation_checked_at?: string | null
+          moderation_reason?: string | null
           reserve_met?: boolean
           review_status?: ReviewStatus
           search_vector?: unknown
           seller_id?: string
+          silent?: boolean
           starting_price_cents?: number | null
           status?: Database["public"]["Enums"]["listing_status"]
           title?: string
@@ -243,6 +307,13 @@ export type Database = {
             columns: ["area_id"]
             isOneToOne: false
             referencedRelation: "areas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listings_charity_id_fkey"
+            columns: ["charity_id"]
+            isOneToOne: false
+            referencedRelation: "charities"
             referencedColumns: ["id"]
           },
           {
@@ -267,6 +338,21 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      marketplace_settings: {
+        Row: {
+          charity_fee_free_cap_cents: number
+          id: boolean
+        }
+        Insert: {
+          charity_fee_free_cap_cents?: number
+          id?: never
+        }
+        Update: {
+          charity_fee_free_cap_cents?: number
+          id?: never
+        }
+        Relationships: []
       }
       meetup_spots: {
         Row: {
@@ -470,6 +556,69 @@ export type Database = {
           },
         ]
       }
+      reviews: {
+        Row: {
+          comment: string | null
+          created_at: string
+          id: number
+          rating: number
+          reviewee_id: string
+          reviewer_id: string
+          reviewer_role: 'buyer' | 'seller'
+          transaction_id: number
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          id?: never
+          rating?: number
+          reviewee_id?: string
+          reviewer_id?: string
+          reviewer_role?: 'buyer' | 'seller'
+          transaction_id?: number
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          id?: never
+          rating?: number
+          reviewee_id?: string
+          reviewer_id?: string
+          reviewer_role?: 'buyer' | 'seller'
+          transaction_id?: number
+        }
+        Relationships: []
+      }
+      strikes: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: number
+          reason: string
+          transaction_id: number | null
+          user_id: string
+          voided_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id?: never
+          reason?: string
+          transaction_id?: number | null
+          user_id?: string
+          voided_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: never
+          reason?: string
+          transaction_id?: number | null
+          user_id?: string
+          voided_at?: string | null
+        }
+        Relationships: []
+      }
       transactions: {
         Row: TransactionRow
         Insert: {
@@ -575,6 +724,90 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_overview: {
+        Args: never
+        Returns: {
+          active_listings: number
+          cancelled_month: number
+          fees_all_cents: number
+          fees_month_cents: number
+          new_users_month: number
+          open_orders: number
+          orders_all: number
+          orders_month: number
+          sales_all_cents: number
+          sales_month_cents: number
+          users: number
+        }[]
+      }
+      admin_review_listing: {
+        Args: { p_approve: boolean; p_listing_id: number; p_reason?: string | null }
+        Returns: undefined
+      }
+      admin_review_queue: {
+        Args: never
+        Returns: {
+          category: string | null
+          created_at: string
+          description: string | null
+          id: number
+          image_paths: string[]
+          listing_type: Database["public"]["Enums"]["listing_type"]
+          moderated_by: string | null
+          moderation_reason: string | null
+          price_cents: number | null
+          seller_name: string
+          title: string
+        }[]
+      }
+      admin_strikes: {
+        Args: never
+        Returns: {
+          active_count: number
+          created_at: string
+          expires_at: string
+          id: number
+          item_title: string | null
+          reason: string
+          username: string
+        }[]
+      }
+      admin_void_strike: { Args: { p_strike_id: number }; Returns: undefined }
+      is_admin: { Args: never; Returns: boolean }
+      admin_charity_queue: {
+        Args: never
+        Returns: {
+          applicant: string
+          bn: string
+          contact_name: string
+          contact_role: string
+          cra_city: string | null
+          cra_legal_name: string | null
+          cra_province: string | null
+          created_at: string
+          description: string | null
+          id: number
+          name: string
+          on_cra_list: boolean
+          website: string | null
+        }[]
+      }
+      admin_review_charity: {
+        Args: { p_approve: boolean; p_charity_id: number; p_note?: string | null }
+        Returns: undefined
+      }
+      admin_set_charity_fee_cap: { Args: { p_cents: number }; Returns: undefined }
+      apply_charity: {
+        Args: {
+          p_bn: string
+          p_contact_name: string
+          p_contact_role: string
+          p_description: string | null
+          p_name: string
+          p_website: string | null
+        }
+        Returns: undefined
+      }
       auction_work_pending: { Args: never; Returns: boolean }
       begin_purchase: {
         Args: { p_buyer_id: string; p_fee_bps: number; p_listing_id: number; p_min_fee_cents?: number }
@@ -611,6 +844,18 @@ export type Database = {
           kind: string
           link: string | null
           title: string
+        }[]
+      }
+      charity_directory: {
+        Args: never
+        Returns: {
+          active_listings: number
+          city: string | null
+          description: string | null
+          id: number
+          name: string
+          province: string | null
+          slug: string
         }[]
       }
       check_handoff_code: {
@@ -668,6 +913,23 @@ export type Database = {
       generate_username: { Args: never; Returns: string }
       get_handoff_code: { Args: { p_transaction_id: number }; Returns: string }
       listing_photos_ok: { Args: { p_paths: string[] }; Returns: boolean }
+      my_charity: {
+        Args: never
+        Returns: {
+          bn: string
+          contact_name: string
+          contact_role: string
+          description: string | null
+          fee_free_cap_cents: number
+          fee_free_used_cents: number
+          id: number
+          name: string
+          review_note: string | null
+          slug: string
+          status: 'pending' | 'approved' | 'rejected' | 'suspended'
+          website: string | null
+        }[]
+      }
       order_party_names: {
         Args: { p_transaction_id: number }
         Returns: {
@@ -691,6 +953,21 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      leave_review: {
+        Args: { p_comment?: string | null; p_rating: number; p_transaction_id: number }
+        Returns: undefined
+      }
+      profile_reviews: {
+        Args: { p_limit?: number; p_username: string }
+        Returns: {
+          comment: string | null
+          created_at: string
+          item_title: string
+          rating: number
+          reviewer_name: string
+          reviewer_role: 'buyer' | 'seller'
+        }[]
+      }
       propose_meetup: {
         Args: { p_note?: string | null; p_spot_id: string; p_times: string[]; p_transaction_id: number }
         Returns: undefined
@@ -705,6 +982,17 @@ export type Database = {
           sender_id: string
           transaction_id: number
         }
+      }
+      public_profile: {
+        Args: { p_username: string }
+        Returns: {
+          member_since: string
+          purchases: number
+          rating: number | null
+          review_count: number
+          sales: number
+          username: string
+        }[]
       }
       release_stale_purchases: {
         Args: never
@@ -736,6 +1024,10 @@ export type Database = {
       }
       seller_can_receive_payouts: { Args: never; Returns: boolean }
       set_username: { Args: { p_name: string }; Returns: string }
+      silent_bid_status: {
+        Args: { p_listing_id: number }
+        Returns: { is_leading: boolean; my_bid_cents: number | null }[]
+      }
       suggest_meetup_spots: {
         Args: { p_limit?: number; p_transaction_id: number }
         Returns: {

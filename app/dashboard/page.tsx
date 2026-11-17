@@ -43,6 +43,8 @@ type MyListing = {
   reserve: { reserve_cents: number } | null
   watch_count: number
   converted_at: string | null
+  review_status: 'pending' | 'approved' | 'rejected'
+  moderation_reason: string | null
 }
 
 type Watched = {
@@ -64,9 +66,9 @@ type MyBid = {
   listing_id: number
   amount_cents: number
   created_at: string
-  listing: { id: number; title: string; current_bid_cents: number | null; ends_at: string | null; status: string } | null
+  listing: { id: number; title: string; current_bid_cents: number | null; ends_at: string | null; status: string; silent: boolean } | null
   /** Worked out when loading (needs the clock). */
-  state: 'winning' | 'outbid' | 'won' | 'ended'
+  state: 'winning' | 'outbid' | 'silent' | 'won' | 'ended'
 }
 
 type MyOrder = {
@@ -79,12 +81,15 @@ type MyOrder = {
   seller_id: string
   proposed_times: string[] | null
   proposed_by: string | null
+  picked_up_at: string | null
+  /** Completed in the last 14 days and you haven't reviewed it yet (worked out when loading). */
+  needsReview?: boolean
   meetup_at: string | null
   listing: { title: string; area: { name: string; city: string; timezone: string } | null } | null
 }
 
 const ORDER_COLUMNS =
-  'id, seller_id, amount_cents, platform_fee_cents, status, created_at, listing_id, proposed_times, proposed_by, meetup_at, listing:listings(title, area:areas(name, city, timezone))'
+  'id, seller_id, amount_cents, platform_fee_cents, status, created_at, listing_id, proposed_times, proposed_by, meetup_at, picked_up_at, listing:listings(title, area:areas(name, city, timezone))'
 
 type DashboardData = {
   firstName: string
@@ -96,6 +101,8 @@ type DashboardData = {
   purchases: MyOrder[]
   sales: MyOrder[]
   watching: Watched[]
+  /** Your active no-show strikes, soonest to expire first. */
+  strikes: { expires_at: string }[]
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -115,6 +122,7 @@ const STATUS_LABELS: Record<string, string> = {
 const BID_STATE_LABELS: Record<MyBid['state'], string> = {
   winning: 'Winning',
   outbid: 'Outbid',
+  silent: 'Silent bid',
   won: 'Won',
   ended: 'Ended',
 }
@@ -142,16 +150,16 @@ export default function DashboardPage() {
       return
     }
 
-    const [profileRes, listingsRes, bidsRes, purchasesRes, salesRes, watchRes] = await Promise.all([
+    const [profileRes, listingsRes, bidsRes, purchasesRes, salesRes, watchRes, strikesRes, myReviewsRes] = await Promise.all([
       supabase.from('profiles').select('full_name, area_id, stripe_payment_method_id, area:areas(name, city)').eq('id', user.id).single(),
       supabase
         .from('listings')
-        .select('id, title, listing_type, status, image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, watch_count, converted_at, reserve:listing_reserves(reserve_cents)')
+        .select('id, title, listing_type, status, image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, watch_count, converted_at, review_status, moderation_reason, reserve:listing_reserves(reserve_cents)')
         .eq('seller_id', user.id)
         .order('created_at', { ascending: false }),
       supabase
         .from('bids')
-        .select('id, listing_id, amount_cents, created_at, listing:listings!bids_listing_id_fkey(id, title, current_bid_cents, ends_at, status)')
+        .select('id, listing_id, amount_cents, created_at, listing:listings!bids_listing_id_fkey(id, title, current_bid_cents, ends_at, status, silent)')
         .eq('bidder_id', user.id)
         .order('created_at', { ascending: false })
         .limit(50),
@@ -174,12 +182,28 @@ export default function DashboardPage() {
         .select('listing_id, listing:listings(id, title, listing_type, status, buy_now_price_cents, display_price_cents, ends_at)')
         .order('created_at', { ascending: false })
         .limit(30),
+      supabase
+        .from('strikes')
+        .select('expires_at')
+        .is('voided_at', null)
+        .gt('expires_at', new Date().toISOString())
+        .order('expires_at'),
+      supabase.from('reviews').select('transaction_id').eq('reviewer_id', user.id),
     ])
 
     const profile = profileRes.data
     const purchases = (purchasesRes.data ?? []) as unknown as MyOrder[]
     // One row per auction (your latest bid is your highest), with where it stands.
     const now = Date.now()
+    const reviewed = new Set((myReviewsRes.data ?? []).map((r) => r.transaction_id))
+    const markReview = (o: MyOrder): MyOrder => ({
+      ...o,
+      needsReview:
+        o.status === 'completed' &&
+        !reviewed.has(o.id) &&
+        !!o.picked_up_at &&
+        now - new Date(o.picked_up_at).getTime() < 14 * 86_400_000,
+    })
     const seen = new Set<number>()
     const bids: MyBid[] = []
     for (const b of (bidsRes.data ?? []) as unknown as Omit<MyBid, 'state'>[]) {
@@ -188,7 +212,7 @@ export default function DashboardPage() {
       const l = b.listing
       const live = l && l.status === 'active' && (!l.ends_at || new Date(l.ends_at).getTime() > now)
       const state: MyBid['state'] = live
-        ? l.current_bid_cents === b.amount_cents ? 'winning' : 'outbid'
+        ? l.silent ? 'silent' : l.current_bid_cents === b.amount_cents ? 'winning' : 'outbid'
         : l && purchases.some((p) => p.listing_id === l.id) ? 'won' : 'ended'
       bids.push({ ...b, state })
       if (bids.length === 20) break
@@ -200,9 +224,10 @@ export default function DashboardPage() {
       hasCard: Boolean(profile?.stripe_payment_method_id),
       listings: (listingsRes.data ?? []) as MyListing[],
       bids,
-      purchases,
-      sales: (salesRes.data ?? []) as unknown as MyOrder[],
+      purchases: purchases.map(markReview),
+      sales: ((salesRes.data ?? []) as unknown as MyOrder[]).map(markReview),
       watching: (watchRes.data ?? []) as unknown as Watched[],
+      strikes: strikesRes.data ?? [],
     })
   }, [])
 
@@ -334,6 +359,21 @@ export default function DashboardPage() {
           </button>
         </div>
 
+        {data && data.strikes.length > 0 && (
+          <div className={`p-4 rounded-xl text-sm ${data.strikes.length >= 3 ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-900'}`}>
+            <p className="font-semibold">
+              {data.strikes.length >= 3
+                ? `Buying, bidding and selling are paused until ${new Date(data.strikes[0].expires_at).toLocaleDateString('en-CA', { month: 'long', day: 'numeric' })}`
+                : `You have ${data.strikes.length} no-show ${data.strikes.length === 1 ? 'strike' : 'strikes'}`}
+            </p>
+            <p className="mt-1">
+              You get a strike when someone reports you didn&apos;t show up to an agreed meetup. Strikes expire after 90 days; with 3,
+              buying, bidding and selling are paused. Tap &ldquo;I&apos;m here&rdquo; on the order page when you arrive: it counts as
+              proof you showed up.
+            </p>
+          </div>
+        )}
+
         {notice && (
           <div
             className={`p-4 rounded-xl text-sm ${
@@ -441,10 +481,23 @@ export default function DashboardPage() {
                         {l.title}
                       </Link>
                       <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 shrink-0">
-                        {STATUS_LABELS[l.status] ?? l.status}
+                        {l.review_status === 'pending' && l.status === 'active'
+                          ? 'In review'
+                          : l.review_status === 'rejected'
+                            ? 'Not approved'
+                            : (STATUS_LABELS[l.status] ?? l.status)}
                       </span>
                     </div>
                     <p className="text-[#0E4D5C] font-bold mt-1">{listingPrice(l)}</p>
+                    {l.review_status !== 'approved' && l.status === 'active' && (
+                      <p className={`text-xs mt-1 ${l.review_status === 'rejected' ? 'text-red-700' : 'text-amber-800'}`}>
+                        {l.review_status === 'rejected'
+                          ? (l.moderation_reason ?? "It doesn't meet our listing rules.")
+                          : l.moderation_reason
+                            ? `Being reviewed: ${l.moderation_reason}`
+                            : 'Being checked. It goes live in a minute or two.'}
+                      </p>
+                    )}
                     <p className="text-xs text-slate-500 mt-1">
                       {l.listing_type === 'auction'
                         ? `${l.bid_count} ${l.bid_count === 1 ? 'bid' : 'bids'}${l.ends_at ? ` · ends ${new Date(l.ends_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}` : ''}${l.reserve ? ` · reserve ${formatCents(l.reserve.reserve_cents)}${l.reserve_met ? ' (met)' : ''}` : ' · no reserve'}`
@@ -625,9 +678,15 @@ export default function DashboardPage() {
         <CreateListingModal
           defaultArea={data?.areaId ?? undefined}
           onClose={() => setShowModal(false)}
-          onCreated={() => {
+          onCreated={(result) => {
             setShowModal(false)
-            setNotice({ kind: 'success', text: 'Your listing is live!' })
+            setNotice(
+              result === 'approved'
+                ? { kind: 'success', text: 'Your listing is live!' }
+                : result === 'held'
+                  ? { kind: 'info', text: "Thanks! We're taking a closer look at your listing before it goes live. We'll let you know." }
+                  : { kind: 'info', text: "Your listing is saved. It'll go live in a minute or two, once our automatic check finishes." },
+            )
             load()
           }}
         />
@@ -640,7 +699,8 @@ export default function DashboardPage() {
 function OrderRow({ order, role }: { order: MyOrder; role: 'buyer' | 'seller' }) {
   const tz = order.listing?.area?.timezone ?? 'America/Edmonton'
   let next: { text: string; action: boolean }
-  if (order.status === 'completed') next = { text: role === 'seller' ? 'Paid' : 'Done', action: false }
+  if (order.status === 'completed')
+    next = order.needsReview ? { text: 'Leave a review', action: true } : { text: role === 'seller' ? 'Paid' : 'Done', action: false }
   else if (order.status !== 'authorized') next = { text: STATUS_LABELS[order.status] ?? order.status, action: false }
   else if (order.meetup_at) next = { text: `Meetup ${formatMeetupTime(order.meetup_at, tz)}`, action: false }
   else if (order.proposed_times?.length) {

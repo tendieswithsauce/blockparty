@@ -4,7 +4,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { connection } from 'next/server'
-import { ArrowLeft, MapPin, ShieldCheck, Tag, User } from 'lucide-react'
+import { ArrowLeft, HeartHandshake, MapPin, ShieldCheck, Tag, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { areaLabel } from '@/lib/areas'
@@ -12,8 +12,10 @@ import { conditionLabel } from '@/lib/categories'
 import { SiteHeader } from '@/components/SiteHeader'
 import { PhotoGallery } from '@/components/listing/PhotoGallery'
 import { BidPanel } from '@/components/listing/BidPanel'
+import { SilentBidPanel } from '@/components/listing/SilentBidPanel'
 import { BuyNowPanel } from '@/components/listing/BuyNowPanel'
 import { WatchButton } from '@/components/listing/WatchButton'
+import { RatingSummary } from '@/components/Stars'
 
 export default function ListingPage({ params }: PageProps<'/listings/[id]'>) {
   return (
@@ -44,7 +46,7 @@ async function ListingContent({ id }: { id: string }) {
   const { data: listing } = await supabase
     .from('listings')
     .select(
-      'id, seller_id, title, description, listing_type, status, condition, area:areas(name, city), category:categories!category_id(id, name, parent:parent_id(id, name)), image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, watch_count, created_at',
+      'id, seller_id, title, description, listing_type, status, condition, area:areas(name, city), category:categories!category_id(id, name, parent:parent_id(id, name)), image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, watch_count, silent, charity:charities(name, slug), created_at',
     )
     .eq('id', listingId)
     .maybeSingle()
@@ -60,6 +62,10 @@ async function ListingContent({ id }: { id: string }) {
     .eq('id', listing.seller_id)
     .maybeSingle()
   const sellerName = seller?.username || 'A neighbour'
+  const { data: sellerProfile } = seller?.username
+    ? await supabase.rpc('public_profile', { p_username: seller.username })
+    : { data: null }
+  const sellerStats = sellerProfile?.[0] ?? null
   const memberSince = seller?.created_at
     ? new Date(seller.created_at).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' })
     : null
@@ -111,9 +117,30 @@ async function ListingContent({ id }: { id: string }) {
           <p className="flex items-center gap-1 text-sm text-slate-500 mt-1">
             <MapPin className="w-4 h-4 text-[#F26B5B]" /> Seller in {areaLabel(listing.area)}
           </p>
+          {listing.charity && (
+            <Link
+              href={`/charities/${listing.charity.slug}`}
+              className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#F4A261]/20 px-3 py-1 text-sm font-semibold text-[#0E4D5C] hover:bg-[#F4A261]/30"
+            >
+              <HeartHandshake className="w-4 h-4 text-[#F26B5B]" /> Supports {listing.charity.name}
+            </Link>
+          )}
         </div>
 
-        {listing.listing_type === 'auction' ? (
+        {listing.silent ? (
+          <SilentBidPanel
+            listing={{
+              id: listing.id,
+              title: listing.title,
+              sellerId: listing.seller_id,
+              status: listing.status,
+              startingPriceCents: listing.starting_price_cents ?? 0,
+              bidCount: listing.bid_count,
+              endsAt: listing.ends_at,
+              charityName: listing.charity?.name ?? null,
+            }}
+          />
+        ) : listing.listing_type === 'auction' ? (
           <BidPanel
             listing={{
               id: listing.id,
@@ -152,7 +179,22 @@ async function ListingContent({ id }: { id: string }) {
             <User className="w-5 h-5 text-[#0E4D5C]" />
           </span>
           <div>
-            <p className="font-semibold">Sold by {sellerName}</p>
+            <p className="font-semibold">
+              Sold by{' '}
+              {seller?.username ? (
+                <Link href={`/u/${seller.username}`} className="hover:text-[#F26B5B] underline-offset-2 hover:underline">
+                  {sellerName}
+                </Link>
+              ) : (
+                sellerName
+              )}
+            </p>
+            {sellerStats && (
+              <p>
+                <RatingSummary rating={sellerStats.rating} count={sellerStats.review_count} />
+                {sellerStats.sales > 0 && <span className="text-slate-500"> · {sellerStats.sales} sold</span>}
+              </p>
+            )}
             {memberSince && <p className="text-slate-500">Member since {memberSince}</p>}
           </div>
         </div>

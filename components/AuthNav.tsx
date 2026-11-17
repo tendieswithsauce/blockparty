@@ -13,6 +13,7 @@ type AuthState = 'loading' | 'signed-out' | { userId: string }
 
 export function AuthNav() {
   const [state, setState] = useState<AuthState>('loading')
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -24,6 +25,20 @@ export function AuthNav() {
     })
     return () => sub.subscription.unsubscribe()
   }, [])
+
+  const userId = typeof state === 'object' ? state.userId : null
+  useEffect(() => {
+    if (!userId) return
+    let cancelled = false
+    createClient()
+      .rpc('is_admin')
+      .then(({ data }) => {
+        if (!cancelled) setIsAdmin(!!data)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
 
   if (state === 'loading') {
     return <span className="inline-block w-32 h-9 rounded-full bg-slate-200/70 animate-pulse" aria-hidden />
@@ -54,6 +69,11 @@ export function AuthNav() {
       <Link href="/profile" className="hover:text-[#F26B5B] transition">
         Profile
       </Link>
+      {isAdmin && (
+        <Link href="/admin" className="hover:text-[#F26B5B] transition">
+          Admin
+        </Link>
+      )}
       <form action={signOut}>
         <button
           type="submit"

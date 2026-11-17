@@ -4,7 +4,8 @@
 // next-highest bidder if a card fails; releases Buy Now reservations whose
 // 3D Secure check was abandoned; and cancels orders whose meetup deadline
 // passed without a handoff (the buyer's hold is released, nobody is charged).
-// Finally, emails any queued notifications (public.notifications).
+// Also runs the automatic check on listings that missed it, and finally
+// emails any queued notifications (public.notifications).
 // Protected by CRON_SECRET (same value as cron_secret in Supabase Vault).
 import { timingSafeEqual } from 'node:crypto'
 import { NextResponse, type NextRequest } from 'next/server'
@@ -14,6 +15,7 @@ import { getStripe, stripeConfigured } from '@/lib/stripe/server'
 import { MIN_PLATFORM_FEE_CENTS, PLATFORM_FEE_BPS } from '@/lib/fees'
 import { NoSavedCardError, createHold, markAuthorized } from '@/lib/payments/holds'
 import { sendNotificationEmails } from '@/lib/notifications/send-emails'
+import { checkPendingListings } from '@/lib/moderation/check-listing'
 import { siteUrl } from '@/lib/site-url'
 
 const MAX_AUCTIONS_PER_RUN = 10
@@ -83,10 +85,13 @@ export async function POST(req: NextRequest) {
     outcomes.push(await closeAuction(id))
   }
 
-  // 4. Emails for notifications, including the ones the steps above just created.
+  // 4. Listings still waiting for their automatic check.
+  const moderation = await checkPendingListings()
+
+  // 5. Emails for notifications, including the ones the steps above just created.
   const emails = await sendNotificationEmails(await siteUrl())
 
-  return NextResponse.json({ released: stale?.length ?? 0, expired: expired?.length ?? 0, auctions: outcomes, emails })
+  return NextResponse.json({ released: stale?.length ?? 0, expired: expired?.length ?? 0, auctions: outcomes, moderation, emails })
 }
 
 async function closeAuction(listingId: number): Promise<Outcome> {
