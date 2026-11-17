@@ -21,6 +21,7 @@ import { areaLabel } from '@/lib/areas'
 import { formatMeetupTime } from '@/lib/orders'
 import { formatCents } from '@/lib/money'
 import { SiteHeader } from '@/components/SiteHeader'
+import { SELL_EVENT } from '@/components/AuthNav'
 import { CreateListingModal } from '@/components/dashboard/CreateListingModal'
 import { ConvertToAuctionModal } from '@/components/dashboard/ConvertToAuctionModal'
 import { PayoutDashboardButton, SetUpPayoutsButton } from '@/components/dashboard/PayoutButton'
@@ -289,6 +290,27 @@ export default function DashboardPage() {
     if (payoutsReady) setShowModal(true)
     else setShowPayoutPrompt(true)
   }
+
+  // The phone tab bar's Sell button: /dashboard?sell=1, or an event when
+  // the dashboard is already open. Waits until we know the payout status.
+  const sellRequested = useRef<boolean | null>(null)
+  useEffect(() => {
+    if (sellRequested.current === null) {
+      const params = new URLSearchParams(window.location.search)
+      sellRequested.current = params.has('sell')
+      if (sellRequested.current) window.history.replaceState(null, '', window.location.pathname)
+    }
+    const open = () => {
+      if (payouts?.ready === true) setShowModal(true)
+      else setShowPayoutPrompt(true)
+    }
+    if (sellRequested.current && payouts !== undefined) {
+      sellRequested.current = false
+      open()
+    }
+    window.addEventListener(SELL_EVENT, open)
+    return () => window.removeEventListener(SELL_EVENT, open)
+  }, [payouts])
 
   const activeListings = data?.listings.filter((l) => l.status === 'active') ?? []
   const soldCount = data?.listings.filter((l) => ['sold', 'pending_pickup', 'complete'].includes(l.status)).length ?? 0

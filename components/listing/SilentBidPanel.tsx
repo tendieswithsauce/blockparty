@@ -9,6 +9,8 @@ import Link from 'next/link'
 import { Clock, CreditCard, EyeOff, Gavel, Trophy } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { HandoffChoice, HandoffDeadlineNote } from '@/components/listing/HandoffChoice'
+import { type HandoffMethod, type HandoffOptions, availableMethods, handoffDeadline } from '@/lib/handoff'
 import { MAX_PRICE_CENTS, dollarsToCents, formatCents } from '@/lib/money'
 
 type ListingInfo = {
@@ -20,6 +22,7 @@ type ListingInfo = {
   bidCount: number
   endsAt: string | null
   charityName: string | null
+  handoff: HandoffOptions
 }
 
 function timeLeft(endsAt: string | null, now: number | null) {
@@ -42,6 +45,10 @@ export function SilentBidPanel({ listing }: { listing: ListingInfo }) {
   const [endsAt, setEndsAt] = useState(listing.endsAt)
   const [userId, setUserId] = useState<string | null | undefined>(undefined)
   const [hasCard, setHasCard] = useState(false)
+  const [hasHomeAddress, setHasHomeAddress] = useState(false)
+  const [method, setMethod] = useState<HandoffMethod>(() => availableMethods(listing.handoff)[0] ?? 'meetup')
+  // Stable for the effect below.
+  const offered = availableMethods(listing.handoff).join(',')
   const [myBid, setMyBid] = useState<number | null>(null)
   const [leading, setLeading] = useState(false)
   const [wonOrderId, setWonOrderId] = useState<number | null>(null)
@@ -81,8 +88,9 @@ export function SilentBidPanel({ listing }: { listing: ListingInfo }) {
       const uid = auth.user?.id ?? null
       setUserId(uid)
       if (!uid) return
-      const [{ data: profile }, { data: win }] = await Promise.all([
-        supabase.from('profiles').select('stripe_payment_method_id').eq('id', uid).single(),
+      const [{ data: profile }, { data: choice }, { data: win }] = await Promise.all([
+        supabase.from('profiles').select('stripe_payment_method_id, home_address').eq('id', uid).single(),
+          supabase.from('bid_handoff_choices').select('method').eq('listing_id', listing.id).eq('bidder_id', uid).maybeSingle(),
         supabase
           .from('transactions')
           .select('id')
@@ -93,6 +101,8 @@ export function SilentBidPanel({ listing }: { listing: ListingInfo }) {
       ])
       if (cancelled) return
       setHasCard(Boolean(profile?.stripe_payment_method_id))
+      setHasHomeAddress(Boolean(profile?.home_address))
+      if (choice?.method && offered.split(',').includes(choice.method)) setMethod(choice.method)
       setWonOrderId(win?.id ?? null)
       await refreshStanding()
     }
@@ -100,7 +110,7 @@ export function SilentBidPanel({ listing }: { listing: ListingInfo }) {
     return () => {
       cancelled = true
     }
-  }, [listing.id, refreshStanding])
+  }, [listing.id, offered, refreshStanding])
 
   // The bid count and end time update live; when someone else bids, check
   // whether you're still on top.
@@ -142,7 +152,7 @@ export function SilentBidPanel({ listing }: { listing: ListingInfo }) {
     const cents = pendingCents
     if (cents === null) return
     setSubmitting(true)
-    const { error: rpcError } = await createClient().rpc('place_bid', { p_listing_id: listing.id, p_amount_cents: cents })
+    const { error: rpcError } = await createClient().rpc('place_bid', { p_listing_id: listing.id, p_amount_cents: cents, p_handoff: method })
     setSubmitting(false)
     setPendingCents(null)
     if (rpcError) {
@@ -282,11 +292,19 @@ export function SilentBidPanel({ listing }: { listing: ListingInfo }) {
             You&apos;re bidding <strong>{formatCents(pendingCents)}</strong> on <strong>{listing.title}</strong>
             {listing.charityName ? <> for {listing.charityName}</> : null}.
           </p>
+          <HandoffChoice
+            options={listing.handoff}
+            value={method}
+            onChange={setMethod}
+            hasHomeAddress={hasHomeAddress}
+            listingId={listing.id}
+          />
           <p>
-            If yours is the highest bid when it ends, Blockparty will place a hold on your saved card for it. You&apos;ll meet at a
-            safe public spot, and your card is only charged once you&apos;ve checked the item.{' '}
-            <strong>Bids can&apos;t be withdrawn.</strong>
+            If yours is the highest bid when it ends, Blockparty will place a hold on your saved card for it
+            {method === 'delivery' && <> plus the {formatCents(listing.handoff.deliveryFeeCents ?? 0)} delivery fee</>}. Your
+            card is only charged once you&apos;ve checked the item. <strong>Bids can&apos;t be withdrawn.</strong>
           </p>
+          {endsAt && <HandoffDeadlineNote deadline={handoffDeadline(new Date(endsAt))} auction />}
         </ConfirmDialog>
       )}
     </div>

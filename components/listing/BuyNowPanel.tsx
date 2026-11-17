@@ -12,9 +12,11 @@ import { createClient } from '@/lib/supabase/client'
 import { formatCents } from '@/lib/money'
 import { BUY_NOW_CANCEL_WINDOW_SECONDS } from '@/lib/purchase-rules'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { HandoffChoice, HandoffDeadlineNote } from '@/components/listing/HandoffChoice'
+import { type HandoffMethod, type HandoffOptions, availableMethods, handoffDeadline, methodTitle } from '@/lib/handoff'
 import { buyNow, cancelPurchase, confirmPurchase } from '@/app/purchases/actions'
 
-type ListingInfo = { id: number; title: string; sellerId: string; status: string; priceCents: number }
+type ListingInfo = { id: number; title: string; sellerId: string; status: string; priceCents: number; handoff: HandoffOptions }
 
 /** The viewer's purchase of this listing, and until when they can undo it. */
 type Purchase = { id: number; cancelUntil: number | null }
@@ -30,9 +32,13 @@ function mmss(ms: number) {
 export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
   const [userId, setUserId] = useState<string | null | undefined>(undefined)
   const [hasCard, setHasCard] = useState(false)
+  const [hasHomeAddress, setHasHomeAddress] = useState(false)
+  const [method, setMethod] = useState<HandoffMethod>(() => availableMethods(listing.handoff)[0] ?? 'meetup')
   const [purchase, setPurchase] = useState<Purchase | null>(null)
   const [canceled, setCanceled] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  // When the dialog opened: the handoff deadline is counted from now.
+  const [openedAt, setOpenedAt] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [now, setNow] = useState<number | null>(null)
@@ -46,7 +52,7 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
       const uid = auth.user?.id ?? null
       if (!uid) return setUserId(null)
       const [{ data: profile }, { data: txn }] = await Promise.all([
-        supabase.from('profiles').select('stripe_payment_method_id').eq('id', uid).single(),
+        supabase.from('profiles').select('stripe_payment_method_id, home_address').eq('id', uid).single(),
         supabase
           .from('transactions')
           .select('id, status, authorized_at')
@@ -57,6 +63,7 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
       ])
       if (cancelled) return
       setHasCard(Boolean(profile?.stripe_payment_method_id))
+      setHasHomeAddress(Boolean(profile?.home_address))
       if (txn) {
         setPurchase({
           id: txn.id,
@@ -90,7 +97,7 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
     setError('')
     setSubmitting(true)
     try {
-      let result = await buyNow(listing.id)
+      let result = await buyNow(listing.id, method)
       if (result.status === 'requires_action') {
         // The bank wants a 3D Secure check before it approves the hold.
         const stripe = publishableKey ? await loadStripe(publishableKey) : null
@@ -125,6 +132,8 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
   }
 
   const price = formatCents(listing.priceCents)
+  const deliveryCents = method === 'delivery' ? (listing.handoff.deliveryFeeCents ?? 0) : 0
+  const total = formatCents(listing.priceCents + deliveryCents)
   const msLeft = cancelUntil !== null && now !== null ? cancelUntil - now : null
   const canUndo = msLeft !== null && msLeft > 0
   const available = listing.status === 'active' || canceled
@@ -141,8 +150,8 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
           <div className="flex items-start gap-2 p-4 rounded-xl bg-green-50 text-green-800 text-sm">
             <CheckCircle2 className="w-5 h-5 shrink-0" />
             <p>
-              <span className="font-semibold">It&apos;s yours!</span> We&apos;ve placed a hold of {price} on your card. The seller will
-              suggest a safe meetup spot and times. You&apos;re only charged once you&apos;ve checked the item.
+              <span className="font-semibold">It&apos;s yours!</span> We&apos;ve placed a hold on your card. Agree on a time with the
+              seller on the order page. You&apos;re only charged once you&apos;ve checked the item.
             </p>
           </div>
           {error && <div className="p-3 rounded-xl text-sm bg-red-50 text-red-700">{error}</div>}
@@ -196,6 +205,7 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
           <button
             onClick={() => {
               setError('')
+              setOpenedAt(Date.now())
               setConfirming(true)
             }}
             className="flex items-center justify-center gap-2 w-full py-3 rounded-full bg-[#F26B5B] text-white font-bold hover:bg-[#e05a4a]"
@@ -209,7 +219,7 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
       {confirming && (
         <ConfirmDialog
           title={`Buy ${listing.title}?`}
-          confirmLabel={`Buy for ${price}`}
+          confirmLabel={`Buy for ${total}`}
           busyLabel="Placing hold…"
           busy={submitting}
           error={error}
@@ -219,10 +229,19 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
             setError('')
           }}
         >
+          <HandoffChoice
+            options={listing.handoff}
+            value={method}
+            onChange={setMethod}
+            hasHomeAddress={hasHomeAddress}
+            listingId={listing.id}
+          />
           <p>
-            Blockparty will place a hold of <strong>{price}</strong> on your saved card now. You&apos;ll meet the seller at a safe
-            public spot, and your card is only charged once you&apos;ve checked the item and accepted it.
+            Blockparty will place a hold of <strong>{total}</strong>
+            {deliveryCents > 0 && <> ({price} + {formatCents(deliveryCents)} delivery)</>} on your saved card now. Your card is
+            only charged once you&apos;ve checked the item and accepted it ({methodTitle(method).toLowerCase()}).
           </p>
+          <HandoffDeadlineNote deadline={handoffDeadline(openedAt)} auction={false} />
           <p>
             You can cancel within {BUY_NOW_CANCEL_WINDOW_SECONDS / 60} minutes if you change your mind. After that the
             purchase is final.

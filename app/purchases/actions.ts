@@ -11,6 +11,7 @@ import { getStripe, stripeConfigured } from '@/lib/stripe/server'
 import { MIN_PLATFORM_FEE_CENTS, PLATFORM_FEE_BPS } from '@/lib/fees'
 import { BUY_NOW_CANCEL_WINDOW_SECONDS, CANCEL_GRACE_SECONDS } from '@/lib/purchase-rules'
 import { NoSavedCardError, createHold, markAuthorized } from '@/lib/payments/holds'
+import type { HandoffMethod } from '@/lib/handoff'
 
 export type BuyResult =
   | { status: 'authorized'; transactionId: number }
@@ -21,11 +22,14 @@ const GENERIC_ERROR = 'Something went wrong placing the hold on your card. You h
 
 type Txn = { id: number; buyer_id: string; status: string; stripe_payment_intent_id: string | null }
 
-export async function buyNow(listingId: number): Promise<BuyResult> {
+const METHODS: HandoffMethod[] = ['meetup', 'pickup', 'delivery']
+
+export async function buyNow(listingId: number, handoff: HandoffMethod = 'meetup'): Promise<BuyResult> {
   if (!stripeConfigured()) return { status: 'error', error: 'Payments are not set up yet. Please try again later.' }
   const user = await getCurrentUser()
   if (!user) return { status: 'error', error: 'Please sign in to buy.' }
   if (!Number.isSafeInteger(listingId)) return { status: 'error', error: 'Listing not found.' }
+  if (!METHODS.includes(handoff)) return { status: 'error', error: "Choose how you'll get the item." }
 
   const admin = createAdminClient()
   const { data: txn, error: reserveError } = await admin.rpc('begin_purchase', {
@@ -33,6 +37,7 @@ export async function buyNow(listingId: number): Promise<BuyResult> {
     p_buyer_id: user.id,
     p_fee_bps: PLATFORM_FEE_BPS,
     p_min_fee_cents: MIN_PLATFORM_FEE_CENTS,
+    p_handoff: handoff,
   })
   if (reserveError || !txn) {
     // Our own messages from the database (P0001) are written for buyers.

@@ -13,14 +13,14 @@ export default function ListingsPage() {
       <SiteHeader active="browse" />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 md:px-6 py-4 md:py-8">
         {/* Header & Filter Bar */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 pb-6 border-b border-slate-200">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 pb-4 md:mb-8 md:pb-6 border-b border-slate-200">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#A8D5BA]/40 text-[#0E4D5C] text-xs font-bold uppercase tracking-wider mb-2">
+            <div className="hidden sm:inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#A8D5BA]/40 text-[#0E4D5C] text-xs font-bold uppercase tracking-wider mb-2">
               <HomeIcon className="w-3.5 h-3.5" /> Public Marketplace
             </div>
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-[#1E293B] tracking-tight">
+            <h1 className="text-2xl sm:text-4xl font-extrabold text-[#1E293B] tracking-tight">
               Treasures Around You
             </h1>
             <p className="text-slate-500 text-sm mt-1">

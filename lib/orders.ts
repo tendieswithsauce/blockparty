@@ -11,6 +11,7 @@ export const CANCEL_REASONS = {
   seller: {
     unavailable: 'The item is no longer available',
     cant_meet: "We couldn't find a time to meet",
+    too_far: 'The delivery address is too far for me',
     buyer_no_show: "The buyer didn't show up",
   },
 } as const
@@ -39,4 +40,8 @@ export function formatMeetupTime(iso: string, timeZone: string) {
 
 export function mapsUrl(lat: number, lng: number) {
   return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
+}
+
+export function addressMapsUrl(address: string) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
 }

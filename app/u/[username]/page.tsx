@@ -4,16 +4,16 @@
 import { Suspense } from 'react'
 import { notFound } from 'next/navigation'
 import { connection } from 'next/server'
-import { User } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { SiteHeader } from '@/components/SiteHeader'
 import { RatingSummary, Stars } from '@/components/Stars'
+import { Avatar } from '@/components/Avatar'
 
 export default function ProfilePage({ params }: PageProps<'/u/[username]'>) {
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#1E293B]">
       <SiteHeader />
-      <main className="max-w-3xl mx-auto px-6 pb-16">
+      <main className="max-w-3xl mx-auto px-4 md:px-6 pb-16">
         <Suspense fallback={<div className="h-64 rounded-2xl bg-slate-200 animate-pulse" />}>
           {params.then(({ username }) => (
             <ProfileContent username={decodeURIComponent(username)} />
@@ -40,9 +40,7 @@ async function ProfileContent({ username }: { username: string }) {
   return (
     <div className="space-y-6">
       <section className="bg-white border rounded-2xl p-6 shadow-sm flex flex-wrap items-center gap-5">
-        <span className="w-16 h-16 rounded-full bg-[#F4A261]/30 flex items-center justify-center shrink-0">
-          <User className="w-8 h-8 text-[#0E4D5C]" />
-        </span>
+        <Avatar path={profile.avatar_path} name={profile.username} size="lg" />
         <div className="flex-1 min-w-[200px]">
           <h1 className="text-2xl font-extrabold">{profile.username}</h1>
           <p className="text-sm text-slate-500">Member since {since}</p>

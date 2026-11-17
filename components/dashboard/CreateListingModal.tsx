@@ -4,7 +4,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ImagePlus, X } from 'lucide-react'
+import Link from 'next/link'
+import { Home, ImagePlus, MapPin, Truck, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { AreaSelect } from '@/components/AreaSelect'
 import { CategorySelect } from '@/components/CategorySelect'
@@ -16,6 +17,7 @@ import { checkMyNewListing } from '@/app/listings/actions'
 import type { ModerationResult } from '@/lib/moderation/check-listing'
 
 const AUCTION_DURATIONS_DAYS = [1, 3, 5, 7] as const
+const DELIVERY_KM = [5, 10, 15, 25, 50] as const
 const MAX_PHOTOS = 8
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024
 // Matches the bucket's allowed types. HEIC is left out: most browsers can't display it.
@@ -50,6 +52,12 @@ export function CreateListingModal({
   const [categoryId, setCategoryId] = useState('')
   const [condition, setCondition] = useState<ListingCondition | ''>('')
   const [photos, setPhotos] = useState<Photo[]>([])
+  const [offersMeetup, setOffersMeetup] = useState(true)
+  const [offersPickup, setOffersPickup] = useState(false)
+  const [offersDelivery, setOffersDelivery] = useState(false)
+  const [deliveryFee, setDeliveryFee] = useState('')
+  const [deliveryKm, setDeliveryKm] = useState<number>(10)
+  const [hasHomeAddress, setHasHomeAddress] = useState<boolean | null>(null)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [saving, setSaving] = useState(false)
@@ -58,6 +66,20 @@ export function CreateListingModal({
   useEffect(() => {
     photosRef.current = photos
   }, [photos])
+
+  // Pickup at home needs the seller's address on their profile.
+  useEffect(() => {
+    let cancelled = false
+    const supabase = createClient()
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return
+      const { data: p } = await supabase.from('profiles').select('home_address').eq('id', data.user.id).maybeSingle()
+      if (!cancelled) setHasHomeAddress(Boolean(p?.home_address))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Free the preview object URLs when the modal closes.
   useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.preview)), [])
@@ -142,6 +164,18 @@ export function CreateListingModal({
       setError('Choose your area so buyers know roughly where the item is.')
       return
     }
+    if (!offersMeetup && !offersPickup && !offersDelivery) {
+      setError('Choose at least one way for the buyer to get the item.')
+      return
+    }
+    let deliveryFeeCents: number | null = null
+    if (offersDelivery) {
+      deliveryFeeCents = deliveryFee.trim() === '' || Number(deliveryFee) === 0 ? 0 : dollarsToCents(deliveryFee)
+      if (deliveryFeeCents === null || deliveryFeeCents > 10000) {
+        setError('Set a delivery fee between $0 and $100.')
+        return
+      }
+    }
 
     setSaving(true)
     const supabase = createClient()
@@ -183,6 +217,10 @@ export function CreateListingModal({
       p_price_cents: priceCents,
       p_duration_days: listingType === 'auction' ? durationDays : null,
       p_reserve_cents: reserveCents,
+      p_offers_meetup: offersMeetup,
+      p_offers_pickup: offersPickup,
+      p_delivery_fee_cents: deliveryFeeCents,
+      p_delivery_km: offersDelivery ? deliveryKm : null,
     })
 
     if (insertError) {
@@ -211,16 +249,16 @@ export function CreateListingModal({
     'mt-1 w-full border border-slate-300 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E4D5C]'
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true">
-      <div className="bg-white max-w-lg w-full rounded-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 pt-6">
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center sm:p-4 z-50" role="dialog" aria-modal="true">
+      <div className="bg-white max-w-lg w-full rounded-t-2xl sm:rounded-2xl max-h-[92dvh] overflow-y-auto pb-[env(safe-area-inset-bottom)]">
+        <div className="flex items-center justify-between px-4 sm:px-6 pt-5 sm:pt-6">
           <h2 className="text-xl font-bold text-[#0E4D5C]">New listing</h2>
           <button type="button" onClick={onClose} disabled={saving} className="p-1 rounded-full hover:bg-slate-100" aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 p-6">
+        <form onSubmit={handleSubmit} className="space-y-4 p-4 sm:p-6">
           {error && <div className="p-3 text-sm rounded-lg bg-red-50 text-red-700">{error}</div>}
 
           {/* Photos */}
@@ -415,10 +453,93 @@ export function CreateListingModal({
               placeholder="Where is the item?"
               className={inputClass}
             />
-            <p className="mt-1 text-xs text-gray-500">
-              Buyers see the area, not your address. You&apos;ll meet at a public spot that suits you both.
-            </p>
+            <p className="mt-1 text-xs text-gray-500">Buyers see the area, not your address.</p>
           </div>
+
+          <fieldset className="space-y-2">
+            <legend className="block text-sm font-medium text-gray-700 mb-1">How buyers can get it</legend>
+            <label className={`flex items-start gap-3 border rounded-xl p-3 ${offersMeetup ? 'border-[#0E4D5C] bg-[#0E4D5C]/5' : ''}`}>
+              <input type="checkbox" className="mt-1 w-4 h-4" checked={offersMeetup} onChange={(e) => setOffersMeetup(e.target.checked)} />
+              <span className="text-sm">
+                <span className="flex items-center gap-1.5 font-semibold">
+                  <MapPin className="w-4 h-4 text-[#0E4D5C]" /> Meet at a safe public spot
+                </span>
+                <span className="block text-gray-500">Recommended. We suggest spots like police exchange zones near you both.</span>
+              </span>
+            </label>
+            <label
+              className={`flex items-start gap-3 border rounded-xl p-3 ${offersPickup ? 'border-[#0E4D5C] bg-[#0E4D5C]/5' : ''} ${
+                hasHomeAddress === false ? 'opacity-70' : ''
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="mt-1 w-4 h-4"
+                checked={offersPickup}
+                disabled={hasHomeAddress === false}
+                onChange={(e) => setOffersPickup(e.target.checked)}
+              />
+              <span className="text-sm">
+                <span className="flex items-center gap-1.5 font-semibold">
+                  <Home className="w-4 h-4 text-[#0E4D5C]" /> Pickup at my home
+                </span>
+                <span className="block text-gray-500">
+                  For when you can&apos;t get out. The buyer only sees your address once their card hold goes through.
+                </span>
+                {hasHomeAddress === false && (
+                  <Link href="/profile" className="block font-semibold text-[#0E4D5C] underline">
+                    Add your home address first
+                  </Link>
+                )}
+              </span>
+            </label>
+            <div className={`border rounded-xl p-3 ${offersDelivery ? 'border-[#0E4D5C] bg-[#0E4D5C]/5' : ''}`}>
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 w-4 h-4"
+                  checked={offersDelivery}
+                  onChange={(e) => setOffersDelivery(e.target.checked)}
+                />
+                <span className="text-sm">
+                  <span className="flex items-center gap-1.5 font-semibold">
+                    <Truck className="w-4 h-4 text-[#0E4D5C]" /> I can deliver
+                  </span>
+                  <span className="block text-gray-500">
+                    You bring it to the buyer&apos;s home. The delivery fee goes to you, with no Blockparty fee on it.
+                  </span>
+                </span>
+              </label>
+              {offersDelivery && (
+                <div className="grid grid-cols-2 gap-3 mt-3 pl-7">
+                  <label className="block">
+                    <span className="text-xs font-medium text-gray-700">Delivery fee ($)</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min={0}
+                      max={100}
+                      placeholder="0 = free"
+                      value={deliveryFee}
+                      onChange={(e) => setDeliveryFee(e.target.value)}
+                      className={inputClass}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-gray-700">How far you&apos;ll go</span>
+                    <select value={deliveryKm} onChange={(e) => setDeliveryKm(Number(e.target.value))} className={inputClass}>
+                      {DELIVERY_KM.map((km) => (
+                        <option key={km} value={km}>
+                          Up to {km} km
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
+            </div>
+          </fieldset>
 
           <div>
             <label htmlFor="listing-description" className="block text-sm font-medium text-gray-700">Description</label>

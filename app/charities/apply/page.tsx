@@ -13,13 +13,22 @@ import type { Database } from '@/lib/supabase/database.types'
 
 type MyCharity = Database['public']['Functions']['my_charity']['Returns'][number]
 
-const input = 'mt-1 w-full border border-slate-300 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E4D5C]'
+const input = 'mt-1 w-full border border-slate-300 px-3 py-2.5 text-base rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E4D5C]'
 
 export default function ApplyCharityPage() {
   const [state, setState] = useState<'loading' | 'signed-out' | 'ready'>('loading')
   const [charity, setCharity] = useState<MyCharity | null>(null)
   const [capCents, setCapCents] = useState<number | null>(null)
-  const [form, setForm] = useState({ bn: '', name: '', description: '', website: '', contactName: '', contactRole: '' })
+  const [form, setForm] = useState({
+    bn: '',
+    name: '',
+    description: '',
+    website: '',
+    contactName: '',
+    contactRole: '',
+    contactPhone: '',
+    contactEmail: '',
+  })
   const [agreed, setAgreed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -32,6 +41,8 @@ export default function ApplyCharityPage() {
     ])
     setCapCents(settings?.charity_fee_free_cap_cents ?? null)
     if (!auth.user) return setState('signed-out')
+    const email = auth.user.email ?? ''
+    setForm((f) => (f.contactEmail ? f : { ...f, contactEmail: email }))
     const { data } = await supabase.rpc('my_charity')
     setCharity(data?.[0] ?? null)
     setState('ready')
@@ -54,6 +65,8 @@ export default function ApplyCharityPage() {
       p_website: form.website || null,
       p_contact_name: form.contactName,
       p_contact_role: form.contactRole,
+      p_contact_phone: form.contactPhone,
+      p_contact_email: form.contactEmail,
     })
     setSaving(false)
     if (rpcError) return setError(rpcError.code === 'P0001' ? `${rpcError.message}.` : 'Something went wrong. Please try again.')
@@ -66,7 +79,7 @@ export default function ApplyCharityPage() {
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#1E293B]">
       <SiteHeader active="charities" />
-      <main className="max-w-2xl mx-auto px-6 pb-16 space-y-6">
+      <main className="max-w-2xl mx-auto px-4 md:px-6 pb-16 space-y-6">
         <div>
           <h1 className="text-3xl font-extrabold text-[#0E4D5C] flex items-center gap-2">
             <HeartHandshake className="w-7 h-7 text-[#F26B5B]" /> Sell for your charity
@@ -95,7 +108,7 @@ export default function ApplyCharityPage() {
         ) : charity && charity.status !== 'rejected' ? (
           <Status charity={charity} />
         ) : (
-          <form onSubmit={submit} className="bg-white border rounded-2xl p-6 shadow-sm space-y-4">
+          <form onSubmit={submit} className="bg-white border rounded-2xl p-5 md:p-6 shadow-sm space-y-4">
             {charity?.status === 'rejected' && (
               <div className="p-3 rounded-xl bg-red-50 text-red-800 text-sm">
                 Your last application wasn&apos;t approved{charity.review_note ? `: ${charity.review_note}` : '.'} You can apply again.
@@ -138,7 +151,36 @@ export default function ApplyCharityPage() {
                 <input value={form.contactRole} onChange={set('contactRole')} placeholder="e.g. Treasurer" maxLength={100} required className={input} />
               </label>
             </div>
-            <p className="text-xs text-slate-500 -mt-2">Your name and role are only shown to Blockparty staff.</p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <label className="block">
+                <span className="text-sm font-medium text-gray-700">Your phone</span>
+                <input
+                  type="tel"
+                  autoComplete="tel"
+                  value={form.contactPhone}
+                  onChange={set('contactPhone')}
+                  placeholder="403-555-0123"
+                  maxLength={30}
+                  required
+                  className={input}
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-gray-700">Your email</span>
+                <input
+                  type="email"
+                  autoComplete="email"
+                  value={form.contactEmail}
+                  onChange={set('contactEmail')}
+                  maxLength={254}
+                  required
+                  className={input}
+                />
+              </label>
+            </div>
+            <p className="text-xs text-slate-500 -mt-2">
+              Your name, role, phone and email are only shown to Blockparty staff, so we can confirm you can act for the charity.
+            </p>
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1" />
               I&apos;m authorized to act for this charity, and items sold here raise money for it.

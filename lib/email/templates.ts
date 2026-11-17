@@ -104,3 +104,22 @@ export function welcomeEmail({ firstName, siteUrl }: { firstName: string | null;
     text: `${hi}\n\nYour account is confirmed. Add a payment method to buy or bid, and set up payouts to sell.\n\nGo to your dashboard: ${siteUrl}/dashboard\n`,
   }
 }
+
+/**
+ * To someone a member named as their emergency contact: where and when the
+ * member is meeting another member (or that it's done / cancelled).
+ */
+export function safetyAlertEmail({ subject, body, toName }: { subject: string; body: string; toName: string | null }) {
+  const hi = toName ? `Hi ${toName},` : 'Hi,'
+  const why =
+    'You&rsquo;re getting this because a Blockparty member added you as their emergency contact. Blockparty is a local marketplace where neighbours meet to buy and sell. If you think this is a mistake, you can ignore this email.'
+  return {
+    subject,
+    html: layout({
+      heading: subject,
+      body: p(esc(hi)) + p(esc(body)),
+      note: `<p style="margin:16px 0 0;font-size:13px;line-height:1.5;color:#94A3B8;">${why}</p>`,
+    }),
+    text: `${hi}\n\n${body}\n\nYou're getting this because a Blockparty member added you as their emergency contact. If you think this is a mistake, you can ignore this email.\n`,
+  }
+}

@@ -5,7 +5,8 @@
 // 3D Secure check was abandoned; and cancels orders whose meetup deadline
 // passed without a handoff (the buyer's hold is released, nobody is charged).
 // Also runs the automatic check on listings that missed it, and finally
-// emails any queued notifications (public.notifications).
+// emails any queued notifications (public.notifications) and emergency
+// contact alerts (public.safety_alerts).
 // Protected by CRON_SECRET (same value as cron_secret in Supabase Vault).
 import { timingSafeEqual } from 'node:crypto'
 import { NextResponse, type NextRequest } from 'next/server'
@@ -15,6 +16,7 @@ import { getStripe, stripeConfigured } from '@/lib/stripe/server'
 import { MIN_PLATFORM_FEE_CENTS, PLATFORM_FEE_BPS } from '@/lib/fees'
 import { NoSavedCardError, createHold, markAuthorized } from '@/lib/payments/holds'
 import { sendNotificationEmails } from '@/lib/notifications/send-emails'
+import { sendSafetyAlerts } from '@/lib/notifications/send-safety-alerts'
 import { checkPendingListings } from '@/lib/moderation/check-listing'
 import { siteUrl } from '@/lib/site-url'
 
@@ -91,7 +93,10 @@ export async function POST(req: NextRequest) {
   // 5. Emails for notifications, including the ones the steps above just created.
   const emails = await sendNotificationEmails(await siteUrl())
 
-  return NextResponse.json({ released: stale?.length ?? 0, expired: expired?.length ?? 0, auctions: outcomes, moderation, emails })
+  // 6. Emergency contact emails (meetup agreed / done / cancelled).
+  const safety = await sendSafetyAlerts()
+
+  return NextResponse.json({ released: stale?.length ?? 0, expired: expired?.length ?? 0, auctions: outcomes, moderation, emails, safety })
 }
 
 async function closeAuction(listingId: number): Promise<Outcome> {

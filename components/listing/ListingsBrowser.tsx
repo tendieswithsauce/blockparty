@@ -255,7 +255,7 @@ export function ListingsBrowser() {
           ))}
         </div>
 
-        <div className="w-56">
+        <div className="flex-1 min-w-[9rem] sm:flex-none sm:w-56">
           <CategorySelect
             mode="filter"
             value={filters.category}
@@ -370,7 +370,7 @@ export function ListingsBrowser() {
 
       {/* Results */}
       {results === null ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           {[1, 2, 3, 4].map((n) => (
             <div key={n} className="h-72 bg-slate-200 animate-pulse rounded-2xl" />
           ))}
@@ -393,36 +393,43 @@ export function ListingsBrowser() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           {results.map((item) => (
             <Link
               key={item.id}
               href={`/listings/${item.id}`}
               className="group bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col"
             >
-              <div className="h-44 bg-slate-100 relative overflow-hidden">
+              <div className="aspect-square sm:aspect-auto sm:h-44 bg-slate-100 relative overflow-hidden">
                 {item.image_paths?.[0] ? (
                   // eslint-disable-next-line @next/next/no-img-element -- Supabase public URL
                   <img src={photoUrl(item.image_paths[0])} alt={item.title} className="w-full h-full object-cover group-hover:scale-[1.02] transition" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs">No photo</div>
                 )}
-                <span
-                  className={`absolute top-3 right-3 px-3 py-1 text-xs font-bold rounded-full shadow-sm text-white ${
-                    item.listing_type === 'auction' ? 'bg-[#F26B5B]' : 'bg-[#0E4D5C]'
-                  }`}
-                >
-                  {item.silent ? 'Silent auction' : item.listing_type === 'auction' ? 'Auction' : 'Set price'}
+                <span className="absolute top-2 right-2 sm:top-3 sm:right-3 flex flex-col items-end gap-1">
+                  <span
+                    className={`px-2.5 sm:px-3 py-1 text-[11px] sm:text-xs font-bold rounded-full shadow-sm text-white ${
+                      item.listing_type === 'auction' ? 'bg-[#F26B5B]' : 'bg-[#0E4D5C]'
+                    }`}
+                  >
+                    {item.silent ? 'Silent auction' : item.listing_type === 'auction' ? 'Auction' : 'Set price'}
+                  </span>
+                  {item.listing_type === 'auction' && !item.has_reserve && (
+                    <span className="px-2.5 sm:px-3 py-1 text-[11px] sm:text-xs font-bold rounded-full shadow-sm bg-[#F4A261] text-[#1E293B]">
+                      No reserve
+                    </span>
+                  )}
                 </span>
                 {item.charity && (
-                  <span className="absolute bottom-3 left-3 max-w-[85%] truncate px-2.5 py-1 text-xs font-semibold rounded-full bg-white/95 text-[#0E4D5C] shadow-sm">
+                  <span className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 max-w-[85%] truncate px-2.5 py-1 text-[11px] sm:text-xs font-semibold rounded-full bg-white/95 text-[#0E4D5C] shadow-sm">
                     ♥ {item.charity.name}
                   </span>
                 )}
               </div>
 
-              <div className="p-4 flex-1 flex flex-col gap-1">
-                <h3 className="font-bold text-slate-900 text-base truncate group-hover:text-[#0E4D5C]">{item.title}</h3>
+              <div className="p-3 sm:p-4 flex-1 flex flex-col gap-1 min-w-0">
+                <h3 className="font-bold text-slate-900 text-sm sm:text-base truncate group-hover:text-[#0E4D5C]">{item.title}</h3>
                 <p className="text-sm text-slate-700">
                   {item.silent ? 'Bids from ' : item.listing_type === 'auction' ? 'Current bid ' : ''}
                   <span className="font-extrabold text-slate-900">{formatCents(item.display_price_cents ?? 0)}</span>

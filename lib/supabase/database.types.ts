@@ -11,6 +11,7 @@ export type Json =
 
 export type ListingCondition = 'new' | 'like_new' | 'good' | 'fair' | 'for_parts'
 export type ReviewStatus = 'pending' | 'approved' | 'rejected'
+export type HandoffMethod = 'meetup' | 'pickup' | 'delivery'
 export type ListingSort = 'newest' | 'relevance' | 'ending_soon' | 'price_low' | 'price_high'
 
 type TransactionRow = {
@@ -21,9 +22,12 @@ type TransactionRow = {
   canceled_at: string | null
   canceled_by: string | null
   created_at: string
+  delivery_fee_cents: number
   fee_waived: boolean
+  handoff_address: string | null
   handoff_attempts: number
   handoff_code: string | null
+  handoff_method: HandoffMethod
   id: number
   listing_id: number
   meetup_at: string | null
@@ -145,6 +149,8 @@ export type Database = {
       charities: {
         Row: {
           approved_at: string | null
+          contact_email: string | null
+          contact_phone: string | null
           created_at: string
           cra_city: string | null
           cra_legal_name: string | null
@@ -213,6 +219,8 @@ export type Database = {
           created_at: string
           current_bid_cents: number | null
           description: string | null
+          delivery_fee_cents: number | null
+          delivery_km: number | null
           display_price_cents: number | null
           ends_at: string | null
           has_reserve: boolean
@@ -223,6 +231,8 @@ export type Database = {
           moderation_attempts: number
           moderation_checked_at: string | null
           moderation_reason: string | null
+          offers_meetup: boolean
+          offers_pickup: boolean
           reserve_met: boolean
           review_status: ReviewStatus
           search_vector: unknown
@@ -492,10 +502,14 @@ export type Database = {
         Row: {
           address: Json | null
           area_id: string | null
+          avatar_path: string | null
           created_at: string
           email: string | null
           email_alerts: boolean
+          emergency_contact_email: string | null
+          emergency_contact_name: string | null
           full_name: string | null
+          home_address: string | null
           id: string
           phone: string | null
           stripe_account_id: string | null
@@ -511,6 +525,10 @@ export type Database = {
         Insert: {
           address?: Json | null
           area_id?: string | null
+          avatar_path?: string | null
+          emergency_contact_email?: string | null
+          emergency_contact_name?: string | null
+          home_address?: string | null
           created_at?: string
           email?: string | null
           email_alerts?: boolean
@@ -530,6 +548,10 @@ export type Database = {
         Update: {
           address?: Json | null
           area_id?: string | null
+          avatar_path?: string | null
+          emergency_contact_email?: string | null
+          emergency_contact_name?: string | null
+          home_address?: string | null
           created_at?: string
           email?: string | null
           email_alerts?: boolean
@@ -629,8 +651,11 @@ export type Database = {
           canceled_at?: string | null
           canceled_by?: string | null
           created_at?: string
+          delivery_fee_cents?: number
+          handoff_address?: string | null
           handoff_attempts?: number
           handoff_code?: string | null
+          handoff_method?: HandoffMethod
           id?: number
           listing_id: number
           meetup_at?: string | null
@@ -691,6 +716,33 @@ export type Database = {
         Row: { term: string }
         Insert: { term: string }
         Update: { term?: string }
+        Relationships: []
+      }
+      bid_handoff_choices: {
+        Row: { bidder_id: string; listing_id: number; method: HandoffMethod; updated_at: string }
+        Insert: { bidder_id: string; listing_id: number; method: HandoffMethod; updated_at?: string }
+        Update: { bidder_id?: string; listing_id?: number; method?: HandoffMethod; updated_at?: string }
+        Relationships: []
+      }
+      safety_alerts: {
+        Row: {
+          attempts: number
+          body: string
+          claimed_at: string | null
+          created_at: string
+          dedupe_key: string
+          id: number
+          kind: string
+          sent_at: string | null
+          status: 'pending' | 'sending' | 'sent' | 'failed'
+          subject: string
+          to_email: string
+          to_name: string | null
+          transaction_id: number
+          user_id: string
+        }
+        Insert: never
+        Update: { status?: 'pending' | 'sending' | 'sent' | 'failed'; sent_at?: string | null }
         Relationships: []
       }
       watchlist: {
@@ -779,7 +831,9 @@ export type Database = {
         Returns: {
           applicant: string
           bn: string
+          contact_email: string | null
           contact_name: string
+          contact_phone: string | null
           contact_role: string
           cra_city: string | null
           cra_legal_name: string | null
@@ -800,7 +854,9 @@ export type Database = {
       apply_charity: {
         Args: {
           p_bn: string
+          p_contact_email?: string | null
           p_contact_name: string
+          p_contact_phone?: string | null
           p_contact_role: string
           p_description: string | null
           p_name: string
@@ -810,7 +866,7 @@ export type Database = {
       }
       auction_work_pending: { Args: never; Returns: boolean }
       begin_purchase: {
-        Args: { p_buyer_id: string; p_fee_bps: number; p_listing_id: number; p_min_fee_cents?: number }
+        Args: { p_buyer_id: string; p_fee_bps: number; p_handoff?: HandoffMethod | null; p_listing_id: number; p_min_fee_cents?: number }
         Returns: TransactionRow
         SetofOptions: {
           from: "*"
@@ -900,6 +956,10 @@ export type Database = {
           p_image_paths: string[]
           p_listing_type: Database["public"]["Enums"]["listing_type"]
           p_price_cents: number
+          p_delivery_fee_cents?: number | null
+          p_delivery_km?: number | null
+          p_offers_meetup?: boolean
+          p_offers_pickup?: boolean
           p_reserve_cents?: number | null
           p_title: string
         }
@@ -938,7 +998,7 @@ export type Database = {
         }[]
       }
       place_bid: {
-        Args: { p_amount_cents: number; p_listing_id: number }
+        Args: { p_amount_cents: number; p_handoff?: HandoffMethod | null; p_listing_id: number }
         Returns: {
           amount_cents: number
           bidder_id: string
@@ -992,6 +1052,7 @@ export type Database = {
           review_count: number
           sales: number
           username: string
+          avatar_path: string | null
         }[]
       }
       release_stale_purchases: {
@@ -1027,6 +1088,49 @@ export type Database = {
       silent_bid_status: {
         Args: { p_listing_id: number }
         Returns: { is_leading: boolean; my_bid_cents: number | null }[]
+      }
+      admin_handoff_locations: {
+        Args: { p_transaction_id: number }
+        Returns: {
+          accuracy_m: number | null
+          captured_at: string | null
+          handoff_method: HandoffMethod
+          lat: number | null
+          listing_title: string
+          lng: number | null
+          meetup_at: string | null
+          order_status: string
+          picked_up_at: string | null
+          role: 'buyer' | 'seller'
+          username: string | null
+        }[]
+      }
+      answer_question: { Args: { p_answer: string; p_question_id: number }; Returns: undefined }
+      ask_question: { Args: { p_listing_id: number; p_question: string }; Returns: number }
+      listing_questions_for: {
+        Args: { p_listing_id: number }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          asker_name: string
+          created_at: string
+          id: number
+          mine: boolean
+          question: string
+        }[]
+      }
+      order_handoff_place: {
+        Args: { p_transaction_id: number }
+        Returns: { address: string | null; address_hidden_until: string | null; method: HandoffMethod }[]
+      }
+      record_handoff_location: {
+        Args: { p_accuracy_m?: number | null; p_lat: number; p_lng: number; p_transaction_id: number }
+        Returns: undefined
+      }
+      remove_question: { Args: { p_question_id: number }; Returns: undefined }
+      claim_safety_alerts: {
+        Args: { p_limit?: number }
+        Returns: { body: string; id: number; subject: string; to_email: string; to_name: string | null }[]
       }
       suggest_meetup_spots: {
         Args: { p_limit?: number; p_transaction_id: number }

@@ -1,6 +1,6 @@
 // app/admin/page.tsx
 // Admin area: revenue at a glance, listings held by the automatic check, and
-// no-show strikes. Every call is checked server-side with is_admin().
+// no-show strikes, charity applications and handoff locations. Every call is checked server-side with is_admin().
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
@@ -72,6 +72,7 @@ export default function AdminPage() {
             <CharityQueue items={charities} onDone={load} />
             {feeCap !== null && <FeeCapSetting cents={feeCap} onDone={load} />}
             <Strikes rows={strikes} onDone={load} />
+            <HandoffLocations />
           </>
         )}
       </main>
@@ -298,6 +299,8 @@ function CharityItem({ item, onDone }: { item: CharityApp; onDone: () => void })
       </p>
       <p>
         Contact: {item.contact_name} ({item.contact_role})
+        {item.contact_phone && <> · <a href={`tel:${item.contact_phone}`} className="underline">{item.contact_phone}</a></>}
+        {item.contact_email && <> · <a href={`mailto:${item.contact_email}`} className="underline">{item.contact_email}</a></>}
         {item.website && (
           <>
             {' · '}
@@ -382,6 +385,90 @@ function FeeCapSetting({ cents, onDone }: { cents: number; onDone: () => void })
         </button>
         {message && <span className="text-sm text-slate-600">{message}</span>}
       </form>
+    </section>
+  )
+}
+
+type LocRow = Fns['admin_handoff_locations']['Returns'][number]
+
+function distanceM(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const R = 6371000
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(b.lat - a.lat)
+  const dLng = toRad(b.lng - a.lng)
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2
+  return Math.round(2 * R * Math.asin(Math.sqrt(h)))
+}
+
+/** Look up where an order's handoff happened (for disputes and no-show reports). */
+function HandoffLocations() {
+  const [orderId, setOrderId] = useState('')
+  const [rows, setRows] = useState<LocRow[] | null>(null)
+  const [error, setError] = useState('')
+
+  async function lookUp(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    const id = Number(orderId.replace(/\D/g, ''))
+    if (!id) return setError('Enter an order number.')
+    const { data, error: rpcError } = await createClient().rpc('admin_handoff_locations', { p_transaction_id: id })
+    if (rpcError) return setError('Could not look that up.')
+    setRows(data ?? [])
+  }
+
+  const located = (rows ?? []).filter((r) => r.lat !== null && r.lng !== null)
+  const both = located.length === 2 ? distanceM(located[0] as { lat: number; lng: number }, located[1] as { lat: number; lng: number }) : null
+
+  return (
+    <section className={card}>
+      <h2 className="text-lg font-bold mb-1">Handoff locations</h2>
+      <p className="text-sm text-slate-500 mb-4">
+        Where the buyer and seller were when the code was shown and entered. Kept 90 days; only admins can see it.
+      </p>
+      <form onSubmit={lookUp} className="flex gap-2 max-w-sm">
+        <input
+          value={orderId}
+          onChange={(e) => setOrderId(e.target.value)}
+          inputMode="numeric"
+          placeholder="Order #"
+          className="flex-1 border border-slate-300 rounded-lg px-3 py-2"
+        />
+        <button type="submit" className="px-4 py-2 rounded-full bg-[#0E4D5C] text-white text-sm font-semibold">
+          Look up
+        </button>
+      </form>
+      {error && <p className="text-sm text-red-700 mt-2">{error}</p>}
+      {rows && rows.length === 0 && <p className="text-sm text-slate-500 mt-3">No order with that number.</p>}
+      {rows && rows.length > 0 && (
+        <div className="mt-4 text-sm space-y-2">
+          <p>
+            <span className="font-semibold">{rows[0].listing_title}</span> · {rows[0].handoff_method} · {rows[0].order_status}
+            {rows[0].meetup_at && <> · agreed {new Date(rows[0].meetup_at).toLocaleString('en-CA')}</>}
+            {rows[0].picked_up_at && <> · completed {new Date(rows[0].picked_up_at).toLocaleString('en-CA')}</>}
+          </p>
+          {located.length === 0 ? (
+            <p className="text-slate-500">No locations recorded for this order.</p>
+          ) : (
+            <ul className="space-y-1">
+              {located.map((r) => (
+                <li key={r.role}>
+                  <span className="font-semibold capitalize">{r.role}</span> ({r.username}):{' '}
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lng}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline"
+                  >
+                    {r.lat?.toFixed(5)}, {r.lng?.toFixed(5)}
+                  </a>{' '}
+                  ±{Math.round(r.accuracy_m ?? 0)} m at {r.captured_at && new Date(r.captured_at).toLocaleString('en-CA')}
+                </li>
+              ))}
+            </ul>
+          )}
+          {both !== null && <p className="font-semibold">About {both} m apart.</p>}
+        </div>
+      )}
     </section>
   )
 }
