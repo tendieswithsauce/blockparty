@@ -4,10 +4,11 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { connection } from 'next/server'
-import { ArrowLeft, MapPin, ShieldCheck, User } from 'lucide-react'
+import { ArrowLeft, MapPin, ShieldCheck, Tag, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { areaLabel } from '@/lib/areas'
+import { conditionLabel } from '@/lib/categories'
 import { SiteHeader } from '@/components/SiteHeader'
 import { PhotoGallery } from '@/components/listing/PhotoGallery'
 import { BidPanel } from '@/components/listing/BidPanel'
@@ -42,11 +43,14 @@ async function ListingContent({ id }: { id: string }) {
   const { data: listing } = await supabase
     .from('listings')
     .select(
-      'id, seller_id, title, description, listing_type, status, area:areas(name, city), image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, created_at',
+      'id, seller_id, title, description, listing_type, status, condition, area:areas(name, city), category:categories!category_id(id, name, parent:parent_id(id, name)), image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, created_at',
     )
     .eq('id', listingId)
     .maybeSingle()
   if (!listing) notFound()
+  // The generated types can't tell the parent link (many-to-one) from the
+  // children link on this self-referencing table; it's a single row.
+  const category = listing.category as unknown as { id: string; name: string; parent: { id: string; name: string } | null } | null
 
   // Profiles are private; only show the seller's display name.
   const { data: seller } = await createAdminClient()
@@ -77,7 +81,25 @@ async function ListingContent({ id }: { id: string }) {
             {listing.listing_type === 'auction' ? 'Auction' : 'Set price'}
           </span>
           <h1 className="text-3xl font-extrabold tracking-tight mt-3">{listing.title}</h1>
-          <p className="flex items-center gap-1 text-sm text-slate-500 mt-2">
+          <p className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm text-slate-500 mt-2">
+            <Tag className="w-4 h-4 text-[#0E4D5C]" />
+            {category?.parent && (
+              <>
+                <Link href={`/listings?category=${category.parent.id}`} className="hover:text-[#0E4D5C] hover:underline">
+                  {category.parent.name}
+                </Link>
+                <span aria-hidden>›</span>
+              </>
+            )}
+            {category && (
+              <Link href={`/listings?category=${category.id}`} className="hover:text-[#0E4D5C] hover:underline">
+                {category.name}
+              </Link>
+            )}
+            <span className="mx-1" aria-hidden>·</span>
+            <span className="font-semibold text-slate-700">{conditionLabel(listing.condition)}</span>
+          </p>
+          <p className="flex items-center gap-1 text-sm text-slate-500 mt-1">
             <MapPin className="w-4 h-4 text-[#F26B5B]" /> Seller in {areaLabel(listing.area)}
           </p>
         </div>

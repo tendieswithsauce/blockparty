@@ -9,6 +9,10 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+export type ListingCondition = 'new' | 'like_new' | 'good' | 'fair' | 'for_parts'
+export type ReviewStatus = 'pending' | 'approved' | 'rejected'
+export type ListingSort = 'newest' | 'relevance' | 'ending_soon' | 'price_low' | 'price_high'
+
 type TransactionRow = {
   amount_cents: number
   authorized_at: string | null
@@ -121,6 +125,20 @@ export type Database = {
           },
         ]
       }
+      categories: {
+        Row: { id: string; is_active: boolean; name: string; parent_id: string | null; sort_order: number }
+        Insert: { id: string; is_active?: boolean; name: string; parent_id?: string | null; sort_order?: number }
+        Update: { id?: string; is_active?: boolean; name?: string; parent_id?: string | null; sort_order?: number }
+        Relationships: [
+          {
+            foreignKeyName: "categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       listing_reserves: {
         Row: { created_at: string; listing_id: number; reserve_cents: number }
         Insert: { created_at?: string; listing_id: number; reserve_cents: number }
@@ -140,15 +158,20 @@ export type Database = {
           area_id: string
           bid_count: number
           buy_now_price_cents: number | null
+          category_id: string
+          condition: ListingCondition
           created_at: string
           current_bid_cents: number | null
           description: string | null
+          display_price_cents: number | null
           ends_at: string | null
           has_reserve: boolean
           id: number
           image_paths: string[]
           listing_type: Database["public"]["Enums"]["listing_type"]
           reserve_met: boolean
+          review_status: ReviewStatus
+          search_vector: unknown
           seller_id: string
           starting_price_cents: number | null
           status: Database["public"]["Enums"]["listing_status"]
@@ -160,15 +183,20 @@ export type Database = {
           area_id: string
           bid_count?: number
           buy_now_price_cents?: number | null
+          category_id: string
+          condition: ListingCondition
           created_at?: string
           current_bid_cents?: number | null
           description?: string | null
+          display_price_cents?: number | null
           ends_at?: string | null
           has_reserve?: boolean
           id?: number
           image_paths?: string[]
           listing_type: Database["public"]["Enums"]["listing_type"]
           reserve_met?: boolean
+          review_status?: ReviewStatus
+          search_vector?: unknown
           seller_id: string
           starting_price_cents?: number | null
           status?: Database["public"]["Enums"]["listing_status"]
@@ -180,15 +208,20 @@ export type Database = {
           area_id?: string
           bid_count?: number
           buy_now_price_cents?: number | null
+          category_id?: string
+          condition?: ListingCondition
           created_at?: string
           current_bid_cents?: number | null
           description?: string | null
+          display_price_cents?: number | null
           ends_at?: string | null
           has_reserve?: boolean
           id?: number
           image_paths?: string[]
           listing_type?: Database["public"]["Enums"]["listing_type"]
           reserve_met?: boolean
+          review_status?: ReviewStatus
+          search_vector?: unknown
           seller_id?: string
           starting_price_cents?: number | null
           status?: Database["public"]["Enums"]["listing_status"]
@@ -202,6 +235,13 @@ export type Database = {
             columns: ["area_id"]
             isOneToOne: false
             referencedRelation: "areas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listings_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
             referencedColumns: ["id"]
           },
           {
@@ -460,6 +500,8 @@ export type Database = {
       create_listing: {
         Args: {
           p_area_id: string
+          p_category_id: string
+          p_condition: ListingCondition
           p_description: string | null
           p_duration_days?: number | null
           p_image_paths: string[]
@@ -511,6 +553,27 @@ export type Database = {
           payment_intent_id: string | null
           transaction_id: number
         }[]
+      }
+      search_listings: {
+        Args: {
+          p_area_ids?: string[] | null
+          p_category_id?: string | null
+          p_conditions?: ListingCondition[] | null
+          p_limit?: number
+          p_listing_type?: Database["public"]["Enums"]["listing_type"] | null
+          p_max_cents?: number | null
+          p_min_cents?: number | null
+          p_offset?: number
+          p_query?: string | null
+          p_sort?: ListingSort
+        }
+        Returns: Database["public"]["Tables"]["listings"]["Row"][]
+        SetofOptions: {
+          from: "*"
+          to: "listings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       seller_can_receive_payouts: { Args: never; Returns: boolean }
       set_username: { Args: { p_name: string }; Returns: string }

@@ -7,6 +7,9 @@ import { useEffect, useRef, useState } from 'react'
 import { ImagePlus, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { AreaSelect } from '@/components/AreaSelect'
+import { CategorySelect } from '@/components/CategorySelect'
+import { CONDITIONS } from '@/lib/categories'
+import type { ListingCondition } from '@/lib/supabase/database.types'
 import { MAX_PRICE_CENTS, dollarsToCents, formatCents } from '@/lib/money'
 import { MIN_PRICE_CENTS, PLATFORM_FEE_LABEL, sellerPayoutCents } from '@/lib/fees'
 
@@ -41,6 +44,8 @@ export function CreateListingModal({
   const [useReserve, setUseReserve] = useState(false)
   const [reserve, setReserve] = useState('')
   const [areaId, setAreaId] = useState<string>(defaultArea ?? '')
+  const [categoryId, setCategoryId] = useState('')
+  const [condition, setCondition] = useState<ListingCondition | ''>('')
   const [photos, setPhotos] = useState<Photo[]>([])
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
@@ -118,6 +123,14 @@ export function CreateListingModal({
         return
       }
     }
+    if (!categoryId) {
+      setError('Choose a category so buyers can find your item.')
+      return
+    }
+    if (!condition) {
+      setError("Choose the item's condition.")
+      return
+    }
     if (photos.length === 0) {
       setError('Add at least one photo so buyers can see the item.')
       return
@@ -161,6 +174,8 @@ export function CreateListingModal({
       p_description: description.trim() || null,
       p_listing_type: listingType,
       p_area_id: areaId,
+      p_category_id: categoryId,
+      p_condition: condition,
       p_image_paths: uploaded,
       p_price_cents: priceCents,
       p_duration_days: listingType === 'auction' ? durationDays : null,
@@ -261,6 +276,33 @@ export function CreateListingModal({
               onChange={(e) => setTitle(e.target.value)}
               className={inputClass}
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="listing-category" className="block text-sm font-medium text-gray-700">Category</label>
+              <CategorySelect id="listing-category" mode="pick" value={categoryId} onChange={setCategoryId} className={inputClass} required />
+            </div>
+            <div>
+              <label htmlFor="listing-condition" className="block text-sm font-medium text-gray-700">Condition</label>
+              <select
+                id="listing-condition"
+                value={condition}
+                onChange={(e) => setCondition(e.target.value as ListingCondition)}
+                className={inputClass}
+                required
+              >
+                <option value="" disabled>
+                  Choose
+                </option>
+                {CONDITIONS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              {condition && <p className="mt-1 text-xs text-gray-500">{CONDITIONS.find((c) => c.value === condition)?.hint}</p>}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
