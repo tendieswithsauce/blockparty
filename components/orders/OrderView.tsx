@@ -1,7 +1,9 @@
 // components/orders/OrderView.tsx
 // The order page for both sides of a sale:
-//   seller suggests a spot + times -> buyer picks one -> at the meetup the
-//   buyer checks the item and gives their code -> seller enters it -> paid.
+//   either side suggests a spot + times (with a note) -> the other picks one
+//   or counters -> at the meetup the buyer checks the item and gives their
+//   code -> seller enters it -> paid. Buyer and seller can message each
+//   other here while the order is open.
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
@@ -13,6 +15,7 @@ import { areaLabel } from '@/lib/areas'
 import { CANCEL_REASONS, cancelReasonLabel, formatMeetupTime, mapsUrl } from '@/lib/orders'
 import { BUY_NOW_CANCEL_WINDOW_SECONDS } from '@/lib/purchase-rules'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { OrderChat } from '@/components/orders/OrderChat'
 import { cancelOrder, completeHandoff } from '@/app/orders/actions'
 
 type Spot = {
@@ -35,6 +38,8 @@ type Order = {
   status: string
   authorized_at: string | null
   proposed_times: string[] | null
+  proposed_by: string | null
+  proposal_note: string | null
   meetup_at: string | null
   meetup_deadline: string | null
   picked_up_at: string | null
@@ -53,7 +58,7 @@ type Order = {
 type Suggestion = Spot & { buyer_km: number; seller_km: number }
 
 const ORDER_COLUMNS =
-  'id, buyer_id, seller_id, amount_cents, platform_fee_cents, status, authorized_at, proposed_times, meetup_at, meetup_deadline, picked_up_at, cancel_reason, canceled_by, listing:listings(id, title, image_paths, listing_type, area:areas(name, city, timezone)), spot:meetup_spots(id, name, address, kind, lat, lng, timezone, notes)'
+  'id, buyer_id, seller_id, amount_cents, platform_fee_cents, status, authorized_at, proposed_times, proposed_by, proposal_note, meetup_at, meetup_deadline, picked_up_at, cancel_reason, canceled_by, listing:listings(id, title, image_paths, listing_type, area:areas(name, city, timezone)), spot:meetup_spots(id, name, address, kind, lat, lng, timezone, notes)'
 
 const card = 'bg-white border rounded-2xl p-6 shadow-sm space-y-4'
 const primaryBtn = 'px-5 py-2.5 rounded-full bg-[#F26B5B] text-white font-bold hover:bg-[#e05a4a] disabled:opacity-60'
@@ -93,7 +98,7 @@ export function OrderView({ id }: { id: number }) {
       o.buyer_id === uid && o.status === 'authorized'
         ? supabase.rpc('get_handoff_code', { p_transaction_id: id })
         : Promise.resolve({ data: null }),
-      o.seller_id === uid && o.status === 'authorized' && !o.meetup_at
+      o.status === 'authorized'
         ? supabase.rpc('suggest_meetup_spots', { p_transaction_id: id, p_limit: 4 })
         : Promise.resolve({ data: null }),
     ])
@@ -191,39 +196,36 @@ export function OrderView({ id }: { id: number }) {
         </div>
       ) : (
         <>
-          {role === 'seller' && inUndoWindow ? (
+          {inUndoWindow ? (
             <div className={card}>
-              <p className="font-semibold">Sold! Waiting a few minutes before it&apos;s final</p>
-              <p className="text-sm text-slate-600">
-                Buyers can cancel a set-price purchase for {BUY_NOW_CANCEL_WINDOW_SECONDS / 60} minutes. You can suggest a meetup
-                once that&apos;s passed.
-              </p>
+              {role === 'seller' ? (
+                <>
+                  <p className="font-semibold">Sold! Waiting a few minutes before it&apos;s final</p>
+                  <p className="text-sm text-slate-600">
+                    Buyers can cancel a set-price purchase for {BUY_NOW_CANCEL_WINDOW_SECONDS / 60} minutes. You can arrange the
+                    meetup once that&apos;s passed.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold">Your purchase is on hold</p>
+                  <p className="text-sm text-slate-600">
+                    You can undo it for {BUY_NOW_CANCEL_WINDOW_SECONDS / 60} minutes. After that, you and {names.seller} agree on a
+                    meetup spot and time here.
+                  </p>
+                </>
+              )}
             </div>
-          ) : !order.meetup_at ? (
-            role === 'seller' ? (
-              <ProposeMeetup
-                order={order}
-                suggestions={suggestions}
-                buyerName={names.buyer}
-                tz={tz}
-                onDone={load}
-              />
-            ) : order.proposed_times?.length && order.spot ? (
-              <ChooseTime order={order} spot={order.spot} sellerName={names.seller} tz={tz} onDone={load} />
-            ) : (
-              <div className={card}>
-                <p className="flex items-center gap-2 font-semibold">
-                  <CalendarClock className="w-5 h-5 text-[#0E4D5C]" /> Waiting for {names.seller} to suggest a meetup
-                </p>
-                <p className="text-sm text-slate-600">
-                  {names.seller} will pick a safe public spot near you both and suggest a few times. We&apos;ll show them here.
-                </p>
-              </div>
-            )
           ) : (
-            order.spot && (
-              <MeetupDetails spot={order.spot} meetupAt={order.meetup_at} tz={tz} other={other} />
-            )
+            <Meetup
+              order={order}
+              role={role}
+              userId={userId}
+              other={other}
+              suggestions={suggestions}
+              tz={tz}
+              onDone={load}
+            />
           )}
 
           {order.meetup_at &&
@@ -242,6 +244,10 @@ export function OrderView({ id }: { id: number }) {
             ) : (
               <HandoffForm order={order} payoutCents={payoutCents} buyerName={names.buyer} onDone={load} />
             ))}
+
+          {!inUndoWindow && (
+            <OrderChat orderId={order.id} userId={userId} other={other} meetupAt={order.meetup_at} now={now} />
+          )}
 
           {order.meetup_deadline && (
             <p className="text-xs text-slate-500">
@@ -284,27 +290,162 @@ function SpotCard({ spot, extra }: { spot: Spot; extra?: React.ReactNode }) {
   )
 }
 
-function ProposeMeetup({
+/**
+ * Meetup negotiation. Either side can suggest a spot and up to 3 times; the
+ * other picks one or suggests something else. Once agreed, either side can
+ * ask to reschedule.
+ */
+function Meetup({
   order,
+  role,
+  userId,
+  other,
   suggestions,
-  buyerName,
   tz,
   onDone,
 }: {
   order: Order
+  role: 'buyer' | 'seller'
+  userId: string
+  other: string
   suggestions: Suggestion[]
-  buyerName: string
   tz: string
   onDone: () => void
 }) {
-  const [spotId, setSpotId] = useState('')
+  const [editing, setEditing] = useState(false)
+  const proposal = order.proposed_times?.length && order.spot ? order.proposed_times : null
+  const proposer = proposal ? (order.proposed_by ?? order.seller_id) : null
+  const done = () => {
+    setEditing(false)
+    onDone()
+  }
+
+  const form = (mode: 'first' | 'update' | 'counter' | 'reschedule') => (
+    <ProposeMeetup
+      order={order}
+      role={role}
+      other={other}
+      suggestions={suggestions}
+      tz={tz}
+      mode={mode}
+      onCancel={mode === 'first' && role === 'seller' ? undefined : () => setEditing(false)}
+      onDone={done}
+    />
+  )
+
+  // Agreed: show it, with a way to ask for a different time.
+  if (order.meetup_at && order.spot) {
+    return editing ? (
+      form('reschedule')
+    ) : (
+      <div className={card}>
+        <p className="flex items-center gap-2 font-bold">
+          <CalendarClock className="w-5 h-5 text-[#0E4D5C]" /> Meeting {other} {formatMeetupTime(order.meetup_at, tz)}
+        </p>
+        <SpotCard spot={order.spot} />
+        <button type="button" onClick={() => setEditing(true)} className="text-sm font-semibold text-[#0E4D5C] underline">
+          Need a different time or place?
+        </button>
+      </div>
+    )
+  }
+
+  // The other side suggested something: pick a time or counter.
+  if (proposal && proposer !== userId && order.spot) {
+    return editing ? (
+      form('counter')
+    ) : (
+      <RespondToProposal order={order} spot={order.spot} times={proposal} other={other} tz={tz} onCounter={() => setEditing(true)} onDone={done} />
+    )
+  }
+
+  // You suggested something: waiting on them, but you can change it.
+  if (proposal && order.spot) {
+    return editing ? (
+      form('update')
+    ) : (
+      <div className={card}>
+        <p className="flex items-center gap-2 font-bold">
+          <CalendarClock className="w-5 h-5 text-[#0E4D5C]" /> Waiting for {other} to pick a time
+        </p>
+        <SpotCard spot={order.spot} />
+        <ul className="text-sm text-slate-600 list-disc pl-5">
+          {proposal.map((t) => (
+            <li key={t}>{formatMeetupTime(t, tz)}</li>
+          ))}
+        </ul>
+        {order.proposal_note && <p className="text-sm text-slate-600 italic">Your note: &ldquo;{order.proposal_note}&rdquo;</p>}
+        <button type="button" onClick={() => setEditing(true)} className="text-sm font-semibold text-[#0E4D5C] underline">
+          Change my suggestion
+        </button>
+      </div>
+    )
+  }
+
+  // Nothing suggested yet. The seller is asked to start; the buyer can too.
+  if (role === 'seller' || editing) return form('first')
+  return (
+    <div className={card}>
+      <p className="flex items-center gap-2 font-semibold">
+        <CalendarClock className="w-5 h-5 text-[#0E4D5C]" /> Waiting for {other} to suggest a meetup
+      </p>
+      <p className="text-sm text-slate-600">
+        {other} will pick a safe public spot near you both and suggest a few times. You can also suggest one yourself.
+      </p>
+      <button type="button" onClick={() => setEditing(true)} className={secondaryBtn}>
+        Suggest a spot and time
+      </button>
+    </div>
+  )
+}
+
+function ProposeMeetup({
+  order,
+  role,
+  other,
+  suggestions,
+  tz,
+  mode,
+  onCancel,
+  onDone,
+}: {
+  order: Order
+  role: 'buyer' | 'seller'
+  other: string
+  suggestions: Suggestion[]
+  tz: string
+  mode: 'first' | 'update' | 'counter' | 'reschedule'
+  onCancel?: () => void
+  onDone: () => void
+}) {
+  // Start from the current spot when changing or countering a suggestion.
+  const [spotId, setSpotId] = useState(mode === 'first' ? '' : (order.spot?.id ?? ''))
   const [times, setTimes] = useState(['', '', ''])
+  const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   // Earliest allowed time, fixed when the form opens.
   const [earliest] = useState(() => toLocalInput(new Date(Date.now() + 30 * 60_000)))
-  const chosenSpot = spotId || suggestions[0]?.id || ''
   const deadline = order.meetup_deadline ? new Date(order.meetup_deadline) : null
+  // The current spot may not be among the nearest suggestions; keep it listed.
+  const spots: Suggestion[] =
+    order.spot && mode !== 'first' && !suggestions.some((s) => s.id === order.spot!.id)
+      ? [{ ...order.spot, buyer_km: NaN, seller_km: NaN }, ...suggestions]
+      : suggestions
+  const chosenSpot = spotId || spots[0]?.id || ''
+
+  const heading = {
+    first: 'Suggest a meetup',
+    update: 'Change your suggestion',
+    counter: 'Suggest something else',
+    reschedule: 'Suggest a new time or place',
+  }[mode]
+  const intro = {
+    first: `Pick a spot and up to 3 times that work for you. ${other} will choose one or suggest something else.`,
+    update: `This replaces what you suggested before. ${other} will be told.`,
+    counter: `Pick a spot and up to 3 times that work better. ${other} will choose one or suggest something else.`,
+    reschedule: `Your current meetup is cancelled until ${other} accepts one of these, so let them know why in the note.`,
+  }[mode]
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -318,6 +459,7 @@ function ProposeMeetup({
       p_transaction_id: order.id,
       p_spot_id: chosenSpot,
       p_times: picked,
+      p_note: note.trim() || null,
     })
     setSaving(false)
     if (rpcError) return setError(`${rpcError.message}.`)
@@ -328,41 +470,35 @@ function ProposeMeetup({
     <form onSubmit={submit} className={card}>
       <div>
         <p className="flex items-center gap-2 font-bold">
-          <CalendarClock className="w-5 h-5 text-[#0E4D5C]" /> Suggest a meetup
+          <CalendarClock className="w-5 h-5 text-[#0E4D5C]" /> {heading}
         </p>
-        <p className="text-sm text-slate-600">
-          {order.proposed_times?.length
-            ? `You've suggested times. Waiting for ${buyerName} to pick one; you can change them below.`
-            : `Pick a spot and up to 3 times that work for you. ${buyerName} will choose one.`}
-        </p>
+        <p className="text-sm text-slate-600">{intro}</p>
       </div>
-
-      {order.proposed_times?.length && order.spot ? (
-        <div className="rounded-xl bg-slate-50 p-3 text-sm space-y-1">
-          <p className="font-semibold">Currently suggested</p>
-          <p>{order.spot.name}</p>
-          <ul className="list-disc pl-5 text-slate-600">
-            {order.proposed_times.map((t) => (
-              <li key={t}>{formatMeetupTime(t, tz)}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
 
       <fieldset className="space-y-2">
         <legend className="text-sm font-semibold mb-1">Spots that suit you both</legend>
-        {suggestions.length === 0 && <p className="text-sm text-slate-500">Loading spots…</p>}
-        {suggestions.map((s) => (
-          <label
-            key={s.id}
-            className={`block border rounded-xl p-3 cursor-pointer ${chosenSpot === s.id ? 'border-[#0E4D5C] bg-[#0E4D5C]/5' : ''}`}
-          >
-            <div className="flex gap-3 items-start">
-              <input type="radio" name="spot" checked={chosenSpot === s.id} onChange={() => setSpotId(s.id)} className="mt-1" />
-              <SpotCard spot={s} extra={<p className="text-xs text-slate-500 mt-1">About {s.seller_km} km from your area</p>} />
-            </div>
-          </label>
-        ))}
+        {spots.length === 0 && <p className="text-sm text-slate-500">Loading spots…</p>}
+        {spots.map((s) => {
+          const km = role === 'seller' ? s.seller_km : s.buyer_km
+          return (
+            <label
+              key={s.id}
+              className={`block border rounded-xl p-3 cursor-pointer ${chosenSpot === s.id ? 'border-[#0E4D5C] bg-[#0E4D5C]/5' : ''}`}
+            >
+              <div className="flex gap-3 items-start">
+                <input type="radio" name="spot" checked={chosenSpot === s.id} onChange={() => setSpotId(s.id)} className="mt-1" />
+                <SpotCard
+                  spot={s}
+                  extra={
+                    <p className="text-xs text-slate-500 mt-1">
+                      {Number.isFinite(km) ? `About ${km} km from your area` : 'Currently suggested'}
+                    </p>
+                  }
+                />
+              </div>
+            </label>
+          )
+        })}
       </fieldset>
 
       <div className="space-y-2">
@@ -382,38 +518,63 @@ function ProposeMeetup({
         {deadline && <p className="text-xs text-slate-500">Any time before {formatMeetupTime(deadline.toISOString(), tz)}.</p>}
       </div>
 
+      <label className="block">
+        <span className="text-sm font-semibold">
+          Note <span className="font-normal text-slate-500">(optional)</span>
+        </span>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          maxLength={300}
+          rows={2}
+          placeholder="e.g. Weekday evenings are easiest for me"
+          className="mt-1 w-full border px-3 py-2 rounded-lg text-sm"
+        />
+      </label>
+
       {error && <div className="p-3 rounded-xl text-sm bg-red-50 text-red-700">{error}</div>}
-      <button type="submit" disabled={saving} className={primaryBtn}>
-        {saving ? 'Sending…' : order.proposed_times?.length ? 'Update suggestion' : `Send to ${buyerName}`}
-      </button>
+      <div className="flex flex-wrap gap-3">
+        <button type="submit" disabled={saving} className={primaryBtn}>
+          {saving ? 'Sending…' : `Send to ${other}`}
+        </button>
+        {onCancel && (
+          <button type="button" onClick={onCancel} disabled={saving} className={secondaryBtn}>
+            Never mind
+          </button>
+        )}
+      </div>
     </form>
   )
 }
 
-function ChooseTime({
+function RespondToProposal({
   order,
   spot,
-  sellerName,
+  times,
+  other,
   tz,
+  onCounter,
   onDone,
 }: {
   order: Order
   spot: Spot
-  sellerName: string
+  times: string[]
+  other: string
   tz: string
+  onCounter: () => void
   onDone: () => void
 }) {
   const [picked, setPicked] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  async function choose(time: string | null) {
+  async function confirm() {
     setError('')
-    if (time === '') return setError('Pick a time.')
+    if (!picked) return setError('Pick a time.')
     setSaving(true)
     const { error: rpcError } = await createClient().rpc('choose_meetup_time', {
       p_transaction_id: order.id,
-      p_time: time,
+      p_time: picked,
     })
     setSaving(false)
     if (rpcError) return setError(`${rpcError.message}.`)
@@ -423,12 +584,17 @@ function ChooseTime({
   return (
     <div className={card}>
       <p className="flex items-center gap-2 font-bold">
-        <CalendarClock className="w-5 h-5 text-[#0E4D5C]" /> {sellerName} suggested a meetup
+        <CalendarClock className="w-5 h-5 text-[#0E4D5C]" /> {other} suggested a meetup
       </p>
       <SpotCard spot={spot} />
+      {order.proposal_note && (
+        <p className="text-sm bg-slate-50 rounded-xl p-3">
+          <span className="font-semibold">{other}:</span> &ldquo;{order.proposal_note}&rdquo;
+        </p>
+      )}
       <fieldset className="space-y-2">
         <legend className="text-sm font-semibold mb-1">Pick a time</legend>
-        {order.proposed_times!.map((t) => (
+        {times.map((t) => (
           <label key={t} className={`flex items-center gap-3 border rounded-xl p-3 cursor-pointer ${picked === t ? 'border-[#0E4D5C] bg-[#0E4D5C]/5' : ''}`}>
             <input type="radio" name="time" checked={picked === t} onChange={() => setPicked(t)} />
             <span className="text-sm font-medium">{formatMeetupTime(t, tz)}</span>
@@ -437,24 +603,13 @@ function ChooseTime({
       </fieldset>
       {error && <div className="p-3 rounded-xl text-sm bg-red-50 text-red-700">{error}</div>}
       <div className="flex flex-wrap gap-3">
-        <button onClick={() => choose(picked)} disabled={saving} className={primaryBtn}>
+        <button onClick={confirm} disabled={saving} className={primaryBtn}>
           {saving ? 'Saving…' : 'Confirm time'}
         </button>
-        <button onClick={() => choose(null)} disabled={saving} className={secondaryBtn}>
-          None of these work
+        <button onClick={onCounter} disabled={saving} className={secondaryBtn}>
+          Suggest something else
         </button>
       </div>
-    </div>
-  )
-}
-
-function MeetupDetails({ spot, meetupAt, tz, other }: { spot: Spot; meetupAt: string; tz: string; other: string }) {
-  return (
-    <div className={card}>
-      <p className="flex items-center gap-2 font-bold">
-        <CalendarClock className="w-5 h-5 text-[#0E4D5C]" /> Meeting {other} {formatMeetupTime(meetupAt, tz)}
-      </p>
-      <SpotCard spot={spot} />
     </div>
   )
 }

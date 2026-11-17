@@ -30,6 +30,8 @@ type TransactionRow = {
   meetup_spot_id: string | null
   picked_up_at: string | null
   platform_fee_cents: number
+  proposal_note: string | null
+  proposed_by: string | null
   proposed_times: string[] | null
   seller_id: string
   status: Database["public"]["Enums"]["transaction_status"]
@@ -373,6 +375,33 @@ export type Database = {
           },
         ]
       }
+      order_messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: number
+          kind: string
+          sender_id: string
+          transaction_id: number
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: never
+          kind?: string
+          sender_id: string
+          transaction_id: number
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: never
+          kind?: string
+          sender_id?: string
+          transaction_id?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           address: Json | null
@@ -460,6 +489,8 @@ export type Database = {
           meetup_spot_id?: string | null
           picked_up_at?: string | null
           platform_fee_cents?: number
+          proposal_note?: string | null
+          proposed_by?: string | null
           proposed_times?: string[] | null
           seller_id: string
           status?: Database["public"]["Enums"]["transaction_status"]
@@ -661,8 +692,19 @@ export type Database = {
         }
       }
       propose_meetup: {
-        Args: { p_spot_id: string; p_times: string[]; p_transaction_id: number }
+        Args: { p_note?: string | null; p_spot_id: string; p_times: string[]; p_transaction_id: number }
         Returns: undefined
+      }
+      send_order_message: {
+        Args: { p_body: string; p_kind?: string; p_transaction_id: number }
+        Returns: {
+          body: string
+          created_at: string
+          id: number
+          kind: string
+          sender_id: string
+          transaction_id: number
+        }
       }
       release_stale_purchases: {
         Args: never

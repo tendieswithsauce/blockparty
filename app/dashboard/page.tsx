@@ -76,13 +76,15 @@ type MyOrder = {
   status: string
   created_at: string
   listing_id: number
+  seller_id: string
   proposed_times: string[] | null
+  proposed_by: string | null
   meetup_at: string | null
   listing: { title: string; area: { name: string; city: string; timezone: string } | null } | null
 }
 
 const ORDER_COLUMNS =
-  'id, amount_cents, platform_fee_cents, status, created_at, listing_id, proposed_times, meetup_at, listing:listings(title, area:areas(name, city, timezone))'
+  'id, seller_id, amount_cents, platform_fee_cents, status, created_at, listing_id, proposed_times, proposed_by, meetup_at, listing:listings(title, area:areas(name, city, timezone))'
 
 type DashboardData = {
   firstName: string
@@ -641,9 +643,11 @@ function OrderRow({ order, role }: { order: MyOrder; role: 'buyer' | 'seller' })
   if (order.status === 'completed') next = { text: role === 'seller' ? 'Paid' : 'Done', action: false }
   else if (order.status !== 'authorized') next = { text: STATUS_LABELS[order.status] ?? order.status, action: false }
   else if (order.meetup_at) next = { text: `Meetup ${formatMeetupTime(order.meetup_at, tz)}`, action: false }
-  else if (order.proposed_times?.length)
-    next = role === 'buyer' ? { text: 'Pick a meetup time', action: true } : { text: 'Waiting for buyer', action: false }
-  else next = role === 'seller' ? { text: 'Suggest a meetup', action: true } : { text: 'Waiting for seller', action: false }
+  else if (order.proposed_times?.length) {
+    // Whoever didn't make the suggestion needs to answer it.
+    const proposer = (order.proposed_by ?? order.seller_id) === order.seller_id ? 'seller' : 'buyer'
+    next = proposer !== role ? { text: 'Pick a meetup time', action: true } : { text: `Waiting for ${role === 'buyer' ? 'seller' : 'buyer'}`, action: false }
+  } else next = role === 'seller' ? { text: 'Suggest a meetup', action: true } : { text: 'Waiting for seller', action: false }
 
   return (
     <li>
