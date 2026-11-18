@@ -767,6 +767,12 @@ export type Database = {
         Update: never
         Relationships: []
       }
+      user_blocks: {
+        Row: { blocked_id: string; blocker_id: string; created_at: string }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       watchlist: {
         Row: {
           created_at: string
@@ -1185,6 +1191,47 @@ export type Database = {
           p_query?: string | null
           p_result_count?: number | null
           p_sort?: string | null
+        }
+        Returns: undefined
+      }
+      admin_reports: {
+        Args: never
+        Returns: {
+          active_strikes: number
+          created_at: string
+          details: string | null
+          id: number
+          listing_id: number | null
+          listing_status: string | null
+          listing_title: string | null
+          open_reports_on_user: number
+          question: string | null
+          question_id: number | null
+          reason: string
+          reported_user: string | null
+          reported_user_id: string | null
+          reporter: string
+          target_type: 'listing' | 'user' | 'question'
+        }[]
+      }
+      admin_resolve_report: {
+        Args: { p_action: 'dismiss' | 'handled' | 'remove_listing' | 'remove_question'; p_note?: string | null; p_report_id: number }
+        Returns: undefined
+      }
+      block_user: { Args: { p_user_id: string }; Returns: undefined }
+      is_blocked_with: { Args: { p_other: string }; Returns: { blocked: boolean; by_me: boolean }[] }
+      my_blocks: {
+        Args: never
+        Returns: { avatar_path: string | null; created_at: string; user_id: string; username: string }[]
+      }
+      report_content: {
+        Args: {
+          p_details?: string | null
+          p_listing_id?: number | null
+          p_question_id?: number | null
+          p_reason: string
+          p_target_type: string
+          p_user_id?: string | null
         }
         Returns: undefined
       }

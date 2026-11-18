@@ -13,6 +13,7 @@ export function ConfirmDialog({
   error,
   onConfirm,
   onCancel,
+  hideCancel = false,
 }: {
   title: string
   children: React.ReactNode
@@ -22,6 +23,8 @@ export function ConfirmDialog({
   error?: string
   onConfirm: () => void
   onCancel: () => void
+  /** Single-button dialogs (e.g. "Done"). */
+  hideCancel?: boolean
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null)
 
@@ -45,21 +48,23 @@ export function ConfirmDialog({
         if (e.target === e.currentTarget && !busy) onCancel()
       }}
     >
-      <div className="bg-white max-w-md w-full p-6 rounded-2xl space-y-4 shadow-xl">
+      <div className="bg-white max-w-md w-full p-6 rounded-2xl space-y-4 shadow-xl max-h-[90dvh] overflow-y-auto">
         <h2 id="confirm-title" className="text-xl font-bold text-[#1E293B]">
           {title}
         </h2>
         <div className="text-sm text-slate-600 space-y-3">{children}</div>
         {error && <div className="p-3 rounded-xl text-sm bg-red-50 text-red-700">{error}</div>}
         <div className="flex justify-end gap-3 pt-2">
-          <button
-            ref={cancelRef}
-            onClick={onCancel}
-            disabled={busy}
-            className="px-5 py-2.5 rounded-full text-slate-600 font-semibold hover:bg-slate-100 disabled:opacity-60"
-          >
-            Cancel
-          </button>
+          {!hideCancel && (
+            <button
+              ref={cancelRef}
+              onClick={onCancel}
+              disabled={busy}
+              className="px-5 py-2.5 rounded-full text-slate-600 font-semibold hover:bg-slate-100 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          )}
           <button
             onClick={onConfirm}
             disabled={busy}

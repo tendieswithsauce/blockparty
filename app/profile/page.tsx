@@ -14,6 +14,7 @@ import { SiteHeader } from '@/components/SiteHeader'
 import { Avatar } from '@/components/Avatar'
 import { PROFILE_CHANGED_EVENT } from '@/components/AuthNav'
 import { PaymentMethodSection } from '@/components/payments/PaymentMethodSection'
+import { BlockedMembers } from '@/components/BlockedMembers'
 import { signOut } from '@/app/auth/actions'
 
 const input =
@@ -374,6 +375,8 @@ export default function ProfilePage() {
             </form>
 
             <PaymentMethodSection />
+
+            <BlockedMembers />
 
             {/* Phone account menu: the desktop header has these links. */}
             <nav className="md:hidden bg-white border rounded-2xl shadow-sm divide-y overflow-hidden" aria-label="Account">

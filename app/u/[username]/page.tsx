@@ -8,6 +8,8 @@ import { createClient } from '@/lib/supabase/server'
 import { SiteHeader } from '@/components/SiteHeader'
 import { RatingSummary, Stars } from '@/components/Stars'
 import { Avatar } from '@/components/Avatar'
+import { SafetyMenu } from '@/components/SafetyMenu'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export default function ProfilePage({ params }: PageProps<'/u/[username]'>) {
   return (
@@ -35,6 +37,9 @@ async function ProfileContent({ username }: { username: string }) {
   const profile = profiles?.[0]
   if (!profile) notFound()
 
+  // Profiles are private; only the id is needed, for report / block.
+  const { data: owner } = await createAdminClient().from('profiles').select('id').eq('username', profile.username).maybeSingle()
+
   const since = new Date(profile.member_since).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' })
 
   return (
@@ -42,7 +47,10 @@ async function ProfileContent({ username }: { username: string }) {
       <section className="bg-white border rounded-2xl p-6 shadow-sm flex flex-wrap items-center gap-5">
         <Avatar path={profile.avatar_path} name={profile.username} size="lg" />
         <div className="flex-1 min-w-[200px]">
-          <h1 className="text-2xl font-extrabold">{profile.username}</h1>
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="text-2xl font-extrabold">{profile.username}</h1>
+            {owner && <SafetyMenu userId={owner.id} username={profile.username} loginNext={`/u/${profile.username}`} />}
+          </div>
           <p className="text-sm text-slate-500">Member since {since}</p>
           <p className="text-sm mt-1">
             <RatingSummary rating={profile.rating} count={profile.review_count} />

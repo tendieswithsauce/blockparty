@@ -1,11 +1,11 @@
 // app/admin/page.tsx
 // Admin area: revenue at a glance, listings held by the automatic check, and
-// no-show strikes, charity applications and handoff locations. Every call is checked server-side with is_admin().
+// member reports, no-show strikes, charity applications and handoff locations. Every call is checked server-side with is_admin().
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, ShieldAlert, XCircle } from 'lucide-react'
+import { CheckCircle2, Flag, ShieldAlert, XCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCents } from '@/lib/money'
 import { SiteHeader } from '@/components/SiteHeader'
@@ -26,19 +26,22 @@ export default function AdminPage() {
   const [strikes, setStrikes] = useState<StrikeRow[]>([])
   const [charities, setCharities] = useState<CharityApp[]>([])
   const [feeCap, setFeeCap] = useState<number | null>(null)
+  const [reports, setReports] = useState<ReportRow[]>([])
 
   const load = useCallback(async () => {
     const supabase = createClient()
     const { data: isAdmin } = await supabase.rpc('is_admin')
     setAllowed(!!isAdmin)
     if (!isAdmin) return
-    const [o, q, s, c, settings] = await Promise.all([
+    const [o, q, s, c, settings, rep] = await Promise.all([
       supabase.rpc('admin_overview'),
       supabase.rpc('admin_review_queue'),
       supabase.rpc('admin_strikes'),
       supabase.rpc('admin_charity_queue'),
       supabase.from('marketplace_settings').select('charity_fee_free_cap_cents').maybeSingle(),
+      supabase.rpc('admin_reports'),
     ])
+    setReports(rep.data ?? [])
     setCharities(c.data ?? [])
     setFeeCap(settings.data?.charity_fee_free_cap_cents ?? null)
     setOverview(o.data?.[0] ?? null)
@@ -68,6 +71,7 @@ export default function AdminPage() {
           <>
             <h1 className="text-3xl font-extrabold text-[#0E4D5C]">Admin</h1>
             {overview && <OverviewCards o={overview} />}
+            <Reports rows={reports} onDone={load} />
             <ReviewQueue items={queue} onDone={load} />
             <CharityQueue items={charities} onDone={load} />
             {feeCap !== null && <FeeCapSetting cents={feeCap} onDone={load} />}
@@ -470,5 +474,124 @@ function HandoffLocations() {
         </div>
       )}
     </section>
+  )
+}
+
+type ReportRow = Fns['admin_reports']['Returns'][number]
+
+const REASON_LABELS: Record<string, string> = {
+  prohibited: 'Prohibited or illegal item',
+  scam: 'Scam or fraud',
+  misleading: 'Misleading or fake listing',
+  offensive: 'Offensive',
+  harassment: 'Harassment or threats',
+  no_show: "Didn't show up / unreliable",
+  off_platform: 'Asked to pay or talk outside Blockparty',
+  spam: 'Spam',
+  other: 'Something else',
+}
+
+function Reports({ rows, onDone }: { rows: ReportRow[]; onDone: () => void }) {
+  return (
+    <section className={card}>
+      <h2 className="text-lg font-bold mb-1 flex items-center gap-2">
+        <Flag className="w-5 h-5 text-red-600" /> Reports ({rows.length})
+      </h2>
+      <p className="text-sm text-slate-500 mb-4">
+        What members reported. Taking a listing down tells the seller why; the reporter is told when it&apos;s dealt with
+        (never who acted or what exactly happened).
+      </p>
+      {rows.length === 0 ? (
+        <p className="text-sm text-slate-500">Nothing to look at.</p>
+      ) : (
+        <ul className="space-y-4">
+          {rows.map((r) => (
+            <ReportItem key={r.id} r={r} onDone={onDone} />
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function ReportItem({ r, onDone }: { r: ReportRow; onDone: () => void }) {
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function act(action: 'dismiss' | 'handled' | 'remove_listing' | 'remove_question') {
+    setBusy(true)
+    setError('')
+    const { error: rpcError } = await createClient().rpc('admin_resolve_report', {
+      p_report_id: r.id,
+      p_action: action,
+      p_note: note.trim() || null,
+    })
+    setBusy(false)
+    if (rpcError) return setError(rpcError.message)
+    onDone()
+  }
+
+  const btn = 'px-3 py-1.5 rounded-full text-sm font-semibold disabled:opacity-60'
+  return (
+    <li className="border rounded-xl p-4 space-y-2 text-sm">
+      <p className="flex flex-wrap items-center gap-2">
+        <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700 text-xs font-bold uppercase">{r.target_type}</span>
+        <span className="font-semibold">{REASON_LABELS[r.reason] ?? r.reason}</span>
+        <span className="text-slate-500">
+          from {r.reporter} · {new Date(r.created_at).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+        </span>
+      </p>
+      {r.details && <p className="bg-slate-50 rounded-lg p-2">&ldquo;{r.details}&rdquo;</p>}
+      {r.listing_id && (
+        <p>
+          Listing:{' '}
+          <Link href={`/listings/${r.listing_id}`} className="underline" target="_blank">
+            {r.listing_title}
+          </Link>{' '}
+          <span className="text-slate-500">({r.listing_status})</span>
+        </p>
+      )}
+      {r.question && <p>Question: &ldquo;{r.question}&rdquo;</p>}
+      {r.reported_user && (
+        <p>
+          Member:{' '}
+          <Link href={`/u/${r.reported_user}`} className="underline" target="_blank">
+            {r.reported_user}
+          </Link>
+          <span className="text-slate-500">
+            {' '}
+            · {r.open_reports_on_user} open {r.open_reports_on_user === 1 ? 'report' : 'reports'} · {r.active_strikes} active{' '}
+            {r.active_strikes === 1 ? 'strike' : 'strikes'}
+          </span>
+        </p>
+      )}
+      <input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Note (shown to the seller if you take the listing down)"
+        maxLength={300}
+        className="w-full border border-slate-300 rounded-lg px-3 py-2"
+      />
+      {error && <p className="text-red-700">{error}</p>}
+      <div className="flex flex-wrap gap-2">
+        {r.target_type === 'listing' && r.listing_status === 'active' && (
+          <button type="button" disabled={busy} onClick={() => act('remove_listing')} className={`${btn} bg-red-600 text-white`}>
+            Take listing down
+          </button>
+        )}
+        {r.target_type === 'question' && (
+          <button type="button" disabled={busy} onClick={() => act('remove_question')} className={`${btn} bg-red-600 text-white`}>
+            Remove question
+          </button>
+        )}
+        <button type="button" disabled={busy} onClick={() => act('handled')} className={`${btn} bg-[#0E4D5C] text-white`}>
+          Mark handled
+        </button>
+        <button type="button" disabled={busy} onClick={() => act('dismiss')} className={`${btn} border text-slate-600`}>
+          Dismiss
+        </button>
+      </div>
+    </li>
   )
 }

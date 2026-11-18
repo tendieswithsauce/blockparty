@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { MessageCircleQuestion } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { ReportDialog, type ReportTarget } from '@/components/ReportDialog'
 import type { Database } from '@/lib/supabase/database.types'
 
 type Question = Database['public']['Functions']['listing_questions_for']['Returns'][number]
@@ -22,6 +23,7 @@ export function ListingQuestions({ listingId, sellerId, open }: { listingId: num
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [report, setReport] = useState<ReportTarget | null>(null)
 
   const load = useCallback(async () => {
     const supabase = createClient()
@@ -57,6 +59,7 @@ export function ListingQuestions({ listingId, sellerId, open }: { listingId: num
 
   return (
     <section id="questions" className="scroll-mt-24 space-y-4">
+      {report && <ReportDialog target={report} onClose={() => setReport(null)} />}
       <h2 className="font-bold flex items-center gap-2">
         <MessageCircleQuestion className="w-5 h-5 text-[#0E4D5C]" /> Questions{answered.length > 0 && ` (${answered.length})`}
       </h2>
@@ -105,9 +108,18 @@ export function ListingQuestions({ listingId, sellerId, open }: { listingId: num
                   <span className="font-bold text-[#F26B5B]">A </span>
                   <span className="whitespace-pre-line">{q.answer}</span>
                 </p>
-                {isSeller && (
+                {(isSeller || (userId && !q.mine)) && (
                   <div className="flex gap-4 text-xs">
-                    <RemoveButton id={q.id} label="Remove" onDone={load} />
+                    {isSeller && <RemoveButton id={q.id} label="Remove" onDone={load} />}
+                    {!q.mine && (
+                      <button
+                        type="button"
+                        onClick={() => setReport({ type: 'question', questionId: q.id, label: 'this question' })}
+                        className="text-slate-500 hover:text-red-600 underline"
+                      >
+                        Report
+                      </button>
+                    )}
                   </div>
                 )}
               </li>

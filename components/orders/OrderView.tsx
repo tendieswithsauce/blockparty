@@ -19,6 +19,7 @@ import { BUY_NOW_CANCEL_WINDOW_SECONDS } from '@/lib/purchase-rules'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { OrderChat } from '@/components/orders/OrderChat'
 import { OrderReview } from '@/components/orders/OrderReview'
+import { SafetyMenu } from '@/components/SafetyMenu'
 import { cancelOrder, completeHandoff } from '@/app/orders/actions'
 
 type Spot = {
@@ -166,9 +167,16 @@ export function OrderView({ id }: { id: number }) {
           {photo && <img src={photo} alt="" className="w-full h-full object-cover" />}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-            Order #{order.id} · {role === 'buyer' ? `Buying from ${names.seller}` : `Selling to ${names.buyer}`}
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+              Order #{order.id} · {role === 'buyer' ? `Buying from ${names.seller}` : `Selling to ${names.buyer}`}
+            </p>
+            <SafetyMenu
+              userId={role === 'buyer' ? order.seller_id : order.buyer_id}
+              username={other}
+              loginNext={`/orders/${order.id}`}
+            />
+          </div>
           <Link href={`/listings/${order.listing?.id}`} className="text-xl font-extrabold hover:text-[#F26B5B] line-clamp-1">
             {order.listing?.title ?? 'Item'}
           </Link>

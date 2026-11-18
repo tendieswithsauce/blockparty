@@ -20,6 +20,8 @@ import { Avatar } from '@/components/Avatar'
 import { ShareButton } from '@/components/listing/ShareButton'
 import { ListingQuestions } from '@/components/listing/ListingQuestions'
 import { ViewTracker } from '@/components/listing/ViewTracker'
+import { SafetyMenu } from '@/components/SafetyMenu'
+import { Ban } from 'lucide-react'
 import { type HandoffOptions, handoffSummary } from '@/lib/handoff'
 
 export default function ListingPage({ params }: PageProps<'/listings/[id]'>) {
@@ -77,6 +79,9 @@ async function ListingContent({ id }: { id: string }) {
     ? await supabase.rpc('public_profile', { p_username: seller.username })
     : { data: null }
   const sellerStats = sellerProfile?.[0] ?? null
+  // Blocked either way: no buying, bidding or questions (enforced in the database too).
+  const { data: blockRows } = await supabase.rpc('is_blocked_with', { p_other: listing.seller_id })
+  const block = blockRows?.[0]?.blocked ? { byMe: blockRows[0].by_me } : null
   const memberSince = seller?.created_at
     ? new Date(seller.created_at).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' })
     : null
@@ -102,6 +107,12 @@ async function ListingContent({ id }: { id: string }) {
             </span>
             <div className="flex items-center gap-2">
               <ShareButton listingId={listing.id} title={listing.title} />
+              <SafetyMenu
+                userId={listing.seller_id}
+                username={sellerName}
+                listing={{ id: listing.id, title: listing.title }}
+                loginNext={`/listings/${listing.id}`}
+              />
               <WatchButton
                 listingId={listing.id}
                 sellerId={listing.seller_id}
@@ -149,7 +160,16 @@ async function ListingContent({ id }: { id: string }) {
           )}
         </div>
 
-        {listing.silent ? (
+        {block ? (
+          <div className="bg-white border rounded-2xl p-6 shadow-sm flex items-start gap-3 text-sm text-slate-600">
+            <Ban className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
+            <p>
+              {block.byMe
+                ? `You've blocked ${sellerName}, so you can't buy or bid on their items. You can unblock them from the ⋯ menu.`
+                : "This item isn't available to you."}
+            </p>
+          </div>
+        ) : listing.silent ? (
           <SilentBidPanel
             listing={{
               id: listing.id,
@@ -234,7 +254,7 @@ async function ListingContent({ id }: { id: string }) {
           </div>
         )}
 
-        <ListingQuestions listingId={listing.id} sellerId={listing.seller_id} open={listing.status === 'active'} />
+        <ListingQuestions listingId={listing.id} sellerId={listing.seller_id} open={listing.status === 'active' && !block} />
       </div>
     </div>
   )
