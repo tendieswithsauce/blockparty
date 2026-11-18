@@ -12,6 +12,7 @@ import { MapPin, Search, SlidersHorizontal, Tag, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { AreaSelect } from '@/components/AreaSelect'
 import { SaveSearchButton } from '@/components/listing/SaveSearchButton'
+import { trackSearch } from '@/lib/track'
 import { CategorySelect } from '@/components/CategorySelect'
 import { areaLabel, cityKey, type Area } from '@/lib/areas'
 import { CONDITIONS, categoryPath, conditionLabel, isCondition, type CategoryRef } from '@/lib/categories'
@@ -175,6 +176,26 @@ export function ListingsBrowser() {
         setResults((data ?? []) as unknown as Result[])
       })
   }, [filters, areaIds, waitingForAreas])
+
+  // Log the search once the person has stopped typing and results are in
+  // (lib/track.ts; empty searches and repeats are skipped by the database).
+  useEffect(() => {
+    if (results === null) return
+    const t = setTimeout(() => {
+      trackSearch({
+        query: filters.q,
+        categoryId: filters.category,
+        areaKey: filters.area,
+        listingType: filters.type,
+        conditions: filters.conditions,
+        minCents: filters.min ? dollarsToCents(filters.min) : null,
+        maxCents: filters.max ? dollarsToCents(filters.max) : null,
+        sort: filters.sort,
+        resultCount: results.length,
+      })
+    }, 1500)
+    return () => clearTimeout(t)
+  }, [results, filters])
 
   const activeFilterCount =
     (filters.category ? 1 : 0) +

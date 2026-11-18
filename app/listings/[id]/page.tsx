@@ -19,6 +19,7 @@ import { RatingSummary } from '@/components/Stars'
 import { Avatar } from '@/components/Avatar'
 import { ShareButton } from '@/components/listing/ShareButton'
 import { ListingQuestions } from '@/components/listing/ListingQuestions'
+import { ViewTracker } from '@/components/listing/ViewTracker'
 import { type HandoffOptions, handoffSummary } from '@/lib/handoff'
 
 export default function ListingPage({ params }: PageProps<'/listings/[id]'>) {
@@ -86,6 +87,7 @@ async function ListingContent({ id }: { id: string }) {
 
   return (
     <div className="grid lg:grid-cols-[1.4fr_1fr] gap-6 lg:gap-10 items-start">
+      <ViewTracker listingId={listing.id} />
       <PhotoGallery photos={photoUrls} title={listing.title} />
 
       <div className="space-y-6">

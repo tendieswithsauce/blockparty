@@ -1168,6 +1168,26 @@ export type Database = {
         }
         Returns: number
       }
+      claim_anonymous_engagement: { Args: { p_anon_id: string }; Returns: undefined }
+      log_listing_view: {
+        Args: { p_anon_id?: string | null; p_listing_id: number; p_source?: string | null }
+        Returns: undefined
+      }
+      log_search: {
+        Args: {
+          p_anon_id?: string | null
+          p_area_key?: string | null
+          p_category_id?: string | null
+          p_conditions?: string[] | null
+          p_listing_type?: Database['public']['Enums']['listing_type'] | null
+          p_max_cents?: number | null
+          p_min_cents?: number | null
+          p_query?: string | null
+          p_result_count?: number | null
+          p_sort?: string | null
+        }
+        Returns: undefined
+      }
       suggest_meetup_spots: {
         Args: { p_limit?: number; p_transaction_id: number }
         Returns: {

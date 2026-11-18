@@ -15,6 +15,7 @@ import { createClient } from '@/lib/supabase/client'
 import { signOut } from '@/app/auth/actions'
 import { NotificationBell } from '@/components/NotificationBell'
 import { Avatar } from '@/components/Avatar'
+import { claimAnonymousHistory, rememberPath } from '@/lib/track'
 
 export type NavSection = 'browse' | 'auctions' | 'charities' | 'how' | null
 
@@ -35,6 +36,7 @@ export function AuthNav({ active = null }: { active?: NavSection }) {
     let cancelled = false
     async function loadMe(uid: string | null) {
       if (!uid) return setState('signed-out')
+      claimAnonymousHistory()
       const { data } = await supabase.from('profiles').select('username, avatar_path').eq('id', uid).maybeSingle()
       if (!cancelled) setState({ userId: uid, username: data?.username ?? null, avatarPath: data?.avatar_path ?? null })
     }
@@ -152,6 +154,7 @@ function DesktopAccount({ state, isAdmin }: { state: AuthState; isAdmin: boolean
 /** Thumb-reachable navigation on phones. */
 function MobileTabBar({ state, active }: { state: AuthState; active: NavSection }) {
   const pathname = usePathname()
+  useEffect(() => rememberPath(pathname), [pathname])
   // Re-read on every render (route changes re-render this), and on back/forward.
   const search = useSyncExternalStore(
     (onChange) => {
