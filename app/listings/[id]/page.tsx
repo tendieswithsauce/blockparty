@@ -50,7 +50,7 @@ async function ListingContent({ id }: { id: string }) {
   const { data: listing } = await supabase
     .from('listings')
     .select(
-      'id, seller_id, title, description, listing_type, status, condition, area:areas(name, city), category:categories!category_id(id, name, parent:parent_id(id, name)), image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, watch_count, silent, charity:charities(name, slug), offers_meetup, offers_pickup, delivery_fee_cents, delivery_km, created_at',
+      'id, seller_id, title, description, listing_type, status, condition, area:areas(name, city), category:categories!category_id(id, name, parent:parent_id(id, name)), image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, watch_count, silent, charity:charities(name, slug), offers_meetup, offers_pickup, delivery_fee_cents, delivery_km, extensions, created_at',
     )
     .eq('id', listingId)
     .maybeSingle()
@@ -157,6 +157,7 @@ async function ListingContent({ id }: { id: string }) {
               startingPriceCents: listing.starting_price_cents ?? 0,
               bidCount: listing.bid_count,
               endsAt: listing.ends_at,
+              extensions: listing.extensions,
               charityName: listing.charity?.name ?? null,
               handoff,
             }}
@@ -172,6 +173,7 @@ async function ListingContent({ id }: { id: string }) {
               currentBidCents: listing.current_bid_cents,
               bidCount: listing.bid_count,
               endsAt: listing.ends_at,
+              extensions: listing.extensions,
               hasReserve: listing.has_reserve,
               reserveMet: listing.reserve_met,
               handoff,

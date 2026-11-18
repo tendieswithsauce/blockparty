@@ -350,7 +350,7 @@ export default function ProfilePage() {
                     className="mt-0.5 w-5 h-5"
                   />
                   <span>
-                    Email me when I&apos;m outbid and about listings I&apos;m watching
+                    Email me when I&apos;m outbid, about listings I&apos;m watching, and about new matches for my saved searches
                     <span className="block text-xs text-slate-500">
                       You&apos;ll always get emails about your own orders: wins, sales, meetups and payments.
                     </span>

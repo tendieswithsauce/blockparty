@@ -11,6 +11,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { MapPin, Search, SlidersHorizontal, Tag, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { AreaSelect } from '@/components/AreaSelect'
+import { SaveSearchButton } from '@/components/listing/SaveSearchButton'
 import { CategorySelect } from '@/components/CategorySelect'
 import { areaLabel, cityKey, type Area } from '@/lib/areas'
 import { CONDITIONS, categoryPath, conditionLabel, isCondition, type CategoryRef } from '@/lib/categories'
@@ -355,17 +356,32 @@ export function ListingsBrowser() {
       )}
 
       {/* Result count + clear */}
-      <div className="flex items-center justify-between mb-4 text-sm text-slate-500" aria-live="polite">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-4 text-sm text-slate-500" aria-live="polite">
         <span>
           {results === null
             ? 'Searching…'
             : `${results.length === 48 ? '48+' : results.length} ${results.length === 1 ? 'listing' : 'listings'}`}
         </span>
-        {(activeFilterCount > 0 || filters.q) && (
-          <button type="button" onClick={clearAll} className="font-semibold text-[#0E4D5C] hover:text-[#F26B5B]">
-            Clear search &amp; filters
-          </button>
-        )}
+        <span className="flex flex-wrap items-center gap-4">
+          <SaveSearchButton
+            search={{
+              query: filters.q,
+              categoryId: filters.category,
+              areaIds,
+              areaKey: filters.area,
+              listingType: filters.type,
+              conditions: filters.conditions,
+              minCents: filters.min ? dollarsToCents(filters.min) : null,
+              maxCents: filters.max ? dollarsToCents(filters.max) : null,
+              queryString: toQueryString(filters),
+            }}
+          />
+          {(activeFilterCount > 0 || filters.q) && (
+            <button type="button" onClick={clearAll} className="font-semibold text-[#0E4D5C] hover:text-[#F26B5B]">
+              Clear search &amp; filters
+            </button>
+          )}
+        </span>
       </div>
 
       {/* Results */}

@@ -21,6 +21,7 @@ type ListingInfo = {
   currentBidCents: number | null
   bidCount: number
   endsAt: string | null
+  extensions: number
   hasReserve: boolean
   reserveMet: boolean
   handoff: HandoffOptions
@@ -55,6 +56,7 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
   const [bidCount, setBidCount] = useState(listing.bidCount)
   const [status, setStatus] = useState(listing.status)
   const [endsAt, setEndsAt] = useState(listing.endsAt)
+  const [extensions, setExtensions] = useState(listing.extensions)
   const [reserveMet, setReserveMet] = useState(listing.reserveMet)
   const [bids, setBids] = useState<Bid[]>([])
   const [userId, setUserId] = useState<string | null | undefined>(undefined)
@@ -148,11 +150,12 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'listings', filter: `id=eq.${listing.id}` },
         (payload) => {
-          const row = payload.new as { current_bid_cents: number | null; bid_count: number; status: string; ends_at: string | null; reserve_met: boolean }
+          const row = payload.new as { current_bid_cents: number | null; bid_count: number; status: string; ends_at: string | null; extensions?: number; reserve_met: boolean }
           setCurrentBid(row.current_bid_cents)
           setBidCount(row.bid_count)
           setStatus(row.status)
           setEndsAt(row.ends_at)
+          setExtensions(row.extensions ?? 0)
           setReserveMet(row.reserve_met)
         },
       )
@@ -356,6 +359,12 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
               ))}
           </div>
           <p className="text-xs text-slate-500">You&apos;ll review your bid before it&apos;s placed.</p>
+          <p className="text-xs text-slate-500">
+            {extensions > 0
+              ? `Extended ${extensions} ${extensions === 1 ? 'time' : 'times'} by late bids. `
+              : ''}
+            A bid in the last 2 minutes adds 2 minutes, so nobody wins by sniping.
+          </p>
         </form>
       )}
 

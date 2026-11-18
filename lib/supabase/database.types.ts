@@ -223,6 +223,7 @@ export type Database = {
           delivery_km: number | null
           display_price_cents: number | null
           ends_at: string | null
+          extensions: number
           has_reserve: boolean
           id: number
           image_paths: string[]
@@ -745,6 +746,27 @@ export type Database = {
         Update: { status?: 'pending' | 'sending' | 'sent' | 'failed'; sent_at?: string | null }
         Relationships: []
       }
+      saved_searches: {
+        Row: {
+          area_ids: string[] | null
+          area_key: string | null
+          category_id: string | null
+          conditions: string[] | null
+          created_at: string
+          id: number
+          label: string
+          last_matched_at: string | null
+          listing_type: Database["public"]["Enums"]["listing_type"] | null
+          max_cents: number | null
+          min_cents: number | null
+          query: string | null
+          query_string: string
+          user_id: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       watchlist: {
         Row: {
           created_at: string
@@ -1131,6 +1153,20 @@ export type Database = {
       claim_safety_alerts: {
         Args: { p_limit?: number }
         Returns: { body: string; id: number; subject: string; to_email: string; to_name: string | null }[]
+      }
+      save_search: {
+        Args: {
+          p_area_ids?: string[] | null
+          p_area_key?: string | null
+          p_category_id?: string | null
+          p_conditions?: string[] | null
+          p_listing_type?: Database["public"]["Enums"]["listing_type"] | null
+          p_max_cents?: number | null
+          p_min_cents?: number | null
+          p_query?: string | null
+          p_query_string?: string
+        }
+        Returns: number
       }
       suggest_meetup_spots: {
         Args: { p_limit?: number; p_transaction_id: number }

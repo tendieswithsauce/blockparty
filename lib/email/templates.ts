@@ -50,13 +50,14 @@ const p = (text: string) =>
   `<p style="margin:0 0 20px;font-size:16px;line-height:1.6;color:#475569;">${text}</p>`
 
 // Kinds the user can switch off on their profile (matches public.notify()).
-const OPTIONAL_KINDS = new Set(['outbid', 'watch_auction', 'watch_ending', 'watch_price_drop'])
+const OPTIONAL_KINDS = new Set(['outbid', 'watch_auction', 'watch_ending', 'watch_price_drop', 'saved_search'])
 
 const CTA_LABELS: Record<string, string> = {
   outbid: 'Bid again',
   watch_auction: 'See the auction',
   watch_ending: 'See the auction',
   watch_price_drop: 'See the listing',
+  saved_search: 'See the listing',
   payment_failed: 'Check my payment method',
   auction_unsold: 'Go to my dashboard',
 }
@@ -78,13 +79,13 @@ export function notificationEmail({
   const url = link ? `${siteUrl}${link}` : `${siteUrl}/dashboard`
   const label = CTA_LABELS[kind] ?? (link?.startsWith('/orders/') ? 'Open my order' : 'Open Blockparty')
   const optOut = OPTIONAL_KINDS.has(kind)
-    ? `<p style="margin:16px 0 0;font-size:13px;line-height:1.5;color:#94A3B8;">You can turn off outbid and watchlist emails on your <a href="${esc(`${siteUrl}/profile`)}" style="color:#0E4D5C;">profile</a>.</p>`
+    ? `<p style="margin:16px 0 0;font-size:13px;line-height:1.5;color:#94A3B8;">You can turn off outbid, watchlist and saved-search emails on your <a href="${esc(`${siteUrl}/profile`)}" style="color:#0E4D5C;">profile</a>.</p>`
     : ''
   return {
     subject: title,
     html: layout({ heading: title, body: body ? p(esc(body)) : '', cta: { label, url }, note: optOut }),
     text: `${title}\n\n${body ? `${body}\n\n` : ''}${label}: ${url}\n${
-      OPTIONAL_KINDS.has(kind) ? `\nTurn off outbid and watchlist emails: ${siteUrl}/profile\n` : ''
+      OPTIONAL_KINDS.has(kind) ? `\nTurn off outbid, watchlist and saved-search emails: ${siteUrl}/profile\n` : ''
     }`,
   }
 }

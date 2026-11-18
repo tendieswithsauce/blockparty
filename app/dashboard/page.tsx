@@ -23,6 +23,7 @@ import { formatCents } from '@/lib/money'
 import { SiteHeader } from '@/components/SiteHeader'
 import { SELL_EVENT } from '@/components/AuthNav'
 import { CreateListingModal } from '@/components/dashboard/CreateListingModal'
+import { SavedSearches } from '@/components/dashboard/SavedSearches'
 import { ConvertToAuctionModal } from '@/components/dashboard/ConvertToAuctionModal'
 import { PayoutDashboardButton, SetUpPayoutsButton } from '@/components/dashboard/PayoutButton'
 import { getPayoutStatus } from '@/app/payouts/actions'
@@ -658,6 +659,8 @@ export default function DashboardPage() {
             </ul>
           </section>
         )}
+
+        <SavedSearches />
       </div>
 
       {showPayoutPrompt && (
