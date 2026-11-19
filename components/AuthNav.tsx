@@ -171,19 +171,20 @@ function TabBar({ state, active, pathname, search }: { state: AuthState; active:
   const onAuctions = pathname === '/listings' && new URLSearchParams(search).get('type') === 'auction'
   const sell = useSellSheet({ onDashboard: pathname === '/dashboard' })
 
-  // Coral bar, white labels; the current page gets a blue pill behind its icon.
+  // Blue bar with white labels; the current page is shown in a soft grey,
+  // with a light pill behind its icon.
   const tab = (on: boolean) =>
-    `flex-1 flex flex-col items-center justify-center gap-0.5 min-h-14 text-[11px] font-semibold text-white transition active:scale-95 ${
-      on ? 'font-bold' : 'text-white/85'
+    `flex-1 flex flex-col items-center justify-center gap-0.5 min-h-14 text-[11px] font-semibold transition active:scale-95 ${
+      on ? 'text-slate-300' : 'text-white'
     }`
   const icon = (on: boolean) =>
-    `flex items-center justify-center h-7 px-3 rounded-full transition ${on ? 'bg-[#0E4D5C] shadow-sm' : ''}`
+    `flex items-center justify-center h-7 px-3 rounded-full transition ${on ? 'bg-white/15' : ''}`
 
   return (
     <nav
       id="mobile-tabbar"
       aria-label="Main"
-      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#F26B5B] shadow-[0_-2px_12px_rgba(0,0,0,0.15)] pb-[env(safe-area-inset-bottom)]"
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#0E4D5C] shadow-[0_-2px_12px_rgba(0,0,0,0.15)] pb-[env(safe-area-inset-bottom)]"
     >
       {sell.sheet}
       <div className="flex max-w-lg mx-auto">
@@ -206,7 +207,7 @@ function TabBar({ state, active, pathname, search }: { state: AuthState; active:
           <>
             {/* Opens the new-listing sheet (or the payout prompt) right here, on any page. */}
             <button type="button" onClick={sell.open} className={tab(false)}>
-              <span className="w-12 h-12 -mt-6 rounded-full bg-[#0E4D5C] text-white flex items-center justify-center shadow-lg ring-4 ring-[#F26B5B] transition active:scale-90 active:shadow-md">
+              <span className="w-12 h-12 -mt-6 rounded-full bg-[#0E4D5C] text-white flex items-center justify-center shadow-lg ring-2 ring-[#F26B5B] transition active:scale-90 active:shadow-md">
                 <PlusCircle className="w-6 h-6" />
               </span>
               Sell
@@ -223,7 +224,7 @@ function TabBar({ state, active, pathname, search }: { state: AuthState; active:
                   path={state.avatarPath}
                   name={state.username}
                   size="xs"
-                  className={pathname === '/profile' ? 'ring-2 ring-white' : 'ring-1 ring-white/70'}
+                  className={pathname === '/profile' ? 'ring-2 ring-slate-300' : 'ring-1 ring-white/70'}
                 />
               </span>
               Me
