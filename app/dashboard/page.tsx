@@ -21,7 +21,8 @@ import { areaLabel } from '@/lib/areas'
 import { formatMeetupTime } from '@/lib/orders'
 import { formatCents } from '@/lib/money'
 import { SiteHeader } from '@/components/SiteHeader'
-import { SELL_EVENT } from '@/components/AuthNav'
+import { LISTING_CREATED_EVENT } from '@/components/SellSheet'
+import type { ModerationResult } from '@/lib/moderation/check-listing'
 import { CreateListingModal } from '@/components/dashboard/CreateListingModal'
 import { SavedSearches } from '@/components/dashboard/SavedSearches'
 import { ConvertToAuctionModal } from '@/components/dashboard/ConvertToAuctionModal'
@@ -127,6 +128,15 @@ const BID_STATE_LABELS: Record<MyBid['state'], string> = {
   silent: 'Silent bid',
   won: 'Won',
   ended: 'Ended',
+}
+
+/** What to tell the seller after they create a listing. */
+function createdNotice(result: ModerationResult): { kind: 'success' | 'info'; text: string } {
+  return result === 'approved'
+    ? { kind: 'success', text: 'Your listing is live!' }
+    : result === 'held'
+      ? { kind: 'info', text: "Thanks! We're taking a closer look at your listing before it goes live. We'll let you know." }
+      : { kind: 'info', text: "Your listing is saved. It'll go live in a minute or two, once our automatic check finishes." }
 }
 
 function listingPrice(l: MyListing) {
@@ -292,26 +302,15 @@ export default function DashboardPage() {
     else setShowPayoutPrompt(true)
   }
 
-  // The phone tab bar's Sell button: /dashboard?sell=1, or an event when
-  // the dashboard is already open. Waits until we know the payout status.
-  const sellRequested = useRef<boolean | null>(null)
+  // A listing created from the phone tab bar's Sell sheet (components/SellSheet).
   useEffect(() => {
-    if (sellRequested.current === null) {
-      const params = new URLSearchParams(window.location.search)
-      sellRequested.current = params.has('sell')
-      if (sellRequested.current) window.history.replaceState(null, '', window.location.pathname)
+    const onCreated = (e: Event) => {
+      setNotice(createdNotice((e as CustomEvent<ModerationResult>).detail))
+      load()
     }
-    const open = () => {
-      if (payouts?.ready === true) setShowModal(true)
-      else setShowPayoutPrompt(true)
-    }
-    if (sellRequested.current && payouts !== undefined) {
-      sellRequested.current = false
-      open()
-    }
-    window.addEventListener(SELL_EVENT, open)
-    return () => window.removeEventListener(SELL_EVENT, open)
-  }, [payouts])
+    window.addEventListener(LISTING_CREATED_EVENT, onCreated)
+    return () => window.removeEventListener(LISTING_CREATED_EVENT, onCreated)
+  }, [load])
 
   const activeListings = data?.listings.filter((l) => l.status === 'active') ?? []
   const soldCount = data?.listings.filter((l) => ['sold', 'pending_pickup', 'complete'].includes(l.status)).length ?? 0
@@ -705,13 +704,7 @@ export default function DashboardPage() {
           onClose={() => setShowModal(false)}
           onCreated={(result) => {
             setShowModal(false)
-            setNotice(
-              result === 'approved'
-                ? { kind: 'success', text: 'Your listing is live!' }
-                : result === 'held'
-                  ? { kind: 'info', text: "Thanks! We're taking a closer look at your listing before it goes live. We'll let you know." }
-                  : { kind: 'info', text: "Your listing is saved. It'll go live in a minute or two, once our automatic check finishes." },
-            )
+            setNotice(createdNotice(result))
             load()
           }}
         />
