@@ -354,14 +354,17 @@ export type Database = {
       marketplace_settings: {
         Row: {
           charity_fee_free_cap_cents: number
+          email_site_url: string | null
           id: boolean
         }
         Insert: {
           charity_fee_free_cap_cents?: number
+          email_site_url?: string | null
           id?: never
         }
         Update: {
           charity_fee_free_cap_cents?: number
+          email_site_url?: string | null
           id?: never
         }
         Relationships: []
