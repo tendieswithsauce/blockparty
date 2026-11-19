@@ -169,12 +169,10 @@ export default function DashboardPage() {
         .select('id, title, listing_type, status, image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, watch_count, converted_at, review_status, moderation_reason, reserve:listing_reserves(reserve_cents)')
         .eq('seller_id', user.id)
         .order('created_at', { ascending: false }),
+      // Bidder ids aren't readable through the API; my_bids() returns your own (newest first).
       supabase
-        .from('bids')
-        .select('id, listing_id, amount_cents, created_at, listing:listings!bids_listing_id_fkey(id, title, current_bid_cents, ends_at, status, silent)')
-        .eq('bidder_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(50),
+        .rpc('my_bids', { p_limit: 50 })
+        .select('id, listing_id, amount_cents, created_at, listing:listings!bids_listing_id_fkey(id, title, current_bid_cents, ends_at, status, silent)'),
       supabase
         .from('transactions')
         .select(ORDER_COLUMNS)

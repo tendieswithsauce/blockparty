@@ -3,7 +3,7 @@
 // Updates in real time via Supabase Realtime when anyone bids.
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Clock, CreditCard, Gavel, Trophy } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -27,7 +27,8 @@ type ListingInfo = {
   handoff: HandoffOptions
 }
 
-type Bid = { id: number; amount_cents: number; created_at: string; bidder_id: string }
+// bidder_no: 1 for the auction's first bidder, 2 for the next, ... (who they are is never sent).
+type Bid = { id: number; amount_cents: number; created_at: string; bidder_no: number }
 
 const BID_INCREMENT_CENTS = 100
 
@@ -60,6 +61,8 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
   const [reserveMet, setReserveMet] = useState(listing.reserveMet)
   const [bids, setBids] = useState<Bid[]>([])
   const [userId, setUserId] = useState<string | null | undefined>(undefined)
+  // Your own bidder number on this auction (null until you bid).
+  const [myNo, setMyNo] = useState<number | null>(null)
   const [hasCard, setHasCard] = useState(false)
   const [hasHomeAddress, setHasHomeAddress] = useState(false)
   const [method, setMethod] = useState<HandoffMethod>(() => availableMethods(listing.handoff)[0] ?? 'meetup')
@@ -81,8 +84,8 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
   const atMax = minBidCents > MAX_PRICE_CENTS
   const isSeller = userId === listing.sellerId
   const topBid = bids[0]
-  const youreWinning = Boolean(userId && topBid?.bidder_id === userId)
-  const youBid = Boolean(userId && bids.some((b) => b.bidder_id === userId))
+  const youreWinning = Boolean(userId && myNo !== null && topBid?.bidder_no === myNo)
+  const youBid = Boolean(userId && myNo !== null)
 
   // Countdown tick.
   useEffect(() => {
@@ -103,7 +106,7 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
     async function loadBids() {
       const { data: history } = await supabase
         .from('bids')
-        .select('id, amount_cents, created_at, bidder_id')
+        .select('id, amount_cents, created_at, bidder_no')
         .eq('listing_id', listing.id)
         .order('amount_cents', { ascending: false })
         .limit(20)
@@ -115,7 +118,7 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
       const uid = auth.user?.id ?? null
       setUserId(uid)
       if (uid) {
-        const [{ data: profile }, { data: choice }, { data: win }] = await Promise.all([
+        const [{ data: profile }, { data: choice }, { data: win }, { data: no }] = await Promise.all([
           supabase.from('profiles').select('stripe_payment_method_id, home_address').eq('id', uid).single(),
           supabase.from('bid_handoff_choices').select('method').eq('listing_id', listing.id).eq('bidder_id', uid).maybeSingle(),
           supabase
@@ -125,6 +128,7 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
             .eq('buyer_id', uid)
             .in('status', ['authorized', 'dropped_off', 'completed'])
             .maybeSingle(),
+          supabase.rpc('my_bidder_no', { p_listing_id: listing.id }),
         ])
         if (cancelled) return
         setHasCard(Boolean(profile?.stripe_payment_method_id))
@@ -132,6 +136,7 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
         if (choice?.method && offered.split(',').includes(choice.method)) setMethod(choice.method)
         setWonCents(win?.amount_cents ?? null)
         setWonOrderId(win?.id ?? null)
+        setMyNo(no ?? null)
       }
     }
     loadBids()
@@ -175,15 +180,8 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
     }
   }, [listing.id])
 
-  // Anonymous labels: "You", or Bidder 1, 2... in order of first bid.
-  const bidderLabel = useMemo(() => {
-    const order = [...bids].sort((a, b) => a.created_at.localeCompare(b.created_at))
-    const labels = new Map<string, string>()
-    for (const b of order) {
-      if (!labels.has(b.bidder_id)) labels.set(b.bidder_id, `Bidder ${labels.size + 1}`)
-    }
-    return (id: string) => (id === userId ? 'You' : (labels.get(id) ?? 'Bidder'))
-  }, [bids, userId])
+  // Anonymous labels: "You", or Bidder 1, 2... (numbered by the database in order of first bid).
+  const bidderLabel = (no: number) => (myNo !== null && no === myNo ? 'You' : `Bidder ${no}`)
 
   // Step 1: check the amount, then ask the bidder to confirm.
   function reviewBid(e: React.FormEvent) {
@@ -215,6 +213,7 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
     // Apply our own bid right away (Realtime will confirm it too).
     if (data) {
       const bid = data as Bid
+      setMyNo(bid.bidder_no)
       setBids((prev) => (prev.some((b) => b.id === bid.id) ? prev : [bid, ...prev]))
       setCurrentBid(bid.amount_cents)
       setBidCount((c) => c + 1)
@@ -402,7 +401,7 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
           <ul className="divide-y text-sm">
             {bids.slice(0, 10).map((b, i) => (
               <li key={b.id} className="py-2 flex justify-between">
-                <span className={i === 0 ? 'font-semibold' : 'text-slate-600'}>{bidderLabel(b.bidder_id)}</span>
+                <span className={i === 0 ? 'font-semibold' : 'text-slate-600'}>{bidderLabel(b.bidder_no)}</span>
                 <span className="tabular-nums">
                   {formatCents(b.amount_cents)}
                   <span className="text-slate-400 ml-2 text-xs">
