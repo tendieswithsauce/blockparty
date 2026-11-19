@@ -120,10 +120,12 @@ export async function checkListing(listingId: number): Promise<ModerationResult>
   } catch (err) {
     // A photo URL Claude couldn't fetch, a rate limit, an outage: leave it
     // pending; the cron route retries (and queues it for an admin after 3).
+    // Fixed message first, details after: never build the first argument
+    // (a format string for console.error) from data.
     if (err instanceof Anthropic.APIError) {
-      console.error(`checkListing ${listingId}: Claude API ${err.status}`, err.message)
+      console.error('checkListing: Claude API error', { listingId, status: err.status, message: err.message })
     } else {
-      console.error(`checkListing ${listingId} failed`, err)
+      console.error('checkListing failed', { listingId }, err)
     }
     return 'error'
   }
