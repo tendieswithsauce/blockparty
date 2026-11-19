@@ -37,6 +37,8 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `place_bid` | listing_id, amount_cents, handoff | bids | auth, service | definer | Places a bid; extends the auction 2 min if it lands in the last 2. |
 | `close_auction` | listing_id, fee_bps, min_fee_cents | transactions | service | definer | Closes an ended auction and creates the order (skips blocked bidders). |
 | `silent_bid_status` | listing_id | table | anon, auth, service | definer | The caller's own silent bid and whether it leads. |
+| `my_bidder_no` | listing_id | integer | auth, service | definer | The caller's bidder number on an auction (null if they haven't bid); bidder ids aren't readable through the API. |
+| `my_bids` | limit | setof bids | auth, service | definer | The caller's bids, newest first (dashboard); can embed the listing. |
 | `cancel_authorized_purchase` | transaction_id, buyer_id, window_seconds | text | service | definer | Buyer's undo window for Buy Now. |
 | `cancel_pending_purchase` | transaction_id | void | service | definer | Cancels a purchase that never completed payment. |
 | `cancel_order` | transaction_id, user_id, reason | text | service | definer | Cancels an order with a reason. |
@@ -135,6 +137,7 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 |---|---|---|
 | `handle_new_user`, `handle_user_email_change` | auth users | Create or sync the profile. |
 | `lock_auction_with_bids` | listings | Once an auction has bids, the seller can't edit it or take it down. |
+| `assign_bidder_no` | bids | Numbers bidders per auction (1, 2, …) in order of first bid; a repeat bidder keeps their number. |
 | `set_updated_at` | many tables | Maintains `updated_at`. |
 | `listing_search_vector` | listings | Maintains the full-text search column. |
 | `listing_handoff_check` | listings | Requires at least one handoff method; validates delivery fee and radius. |

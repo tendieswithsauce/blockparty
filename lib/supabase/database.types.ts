@@ -98,6 +98,7 @@ export type Database = {
         Row: {
           amount_cents: number
           bidder_id: string
+          bidder_no: number
           created_at: string
           id: number
           listing_id: number
@@ -105,6 +106,7 @@ export type Database = {
         Insert: {
           amount_cents: number
           bidder_id: string
+          bidder_no?: number
           created_at?: string
           id?: number
           listing_id: number
@@ -1035,6 +1037,7 @@ export type Database = {
         Returns: {
           amount_cents: number
           bidder_id: string
+          bidder_no: number
           created_at: string
           id: number
           listing_id: number
@@ -1225,6 +1228,17 @@ export type Database = {
       }
       block_user: { Args: { p_user_id: string }; Returns: undefined }
       is_blocked_with: { Args: { p_other: string }; Returns: { blocked: boolean; by_me: boolean }[] }
+      my_bidder_no: { Args: { p_listing_id: number }; Returns: number | null }
+      my_bids: {
+        Args: { p_limit?: number }
+        Returns: Database["public"]["Tables"]["bids"]["Row"][]
+        SetofOptions: {
+          from: "*"
+          to: "bids"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       my_blocks: {
         Args: never
         Returns: { avatar_path: string | null; created_at: string; user_id: string; username: string }[]
