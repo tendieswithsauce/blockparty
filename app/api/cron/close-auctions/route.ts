@@ -6,7 +6,8 @@
 // passed without a handoff (the buyer's hold is released, nobody is charged).
 // Also runs the automatic check on listings that missed it, and finally
 // emails any queued notifications (public.notifications) and emergency
-// contact alerts (public.safety_alerts).
+// contact alerts (public.safety_alerts). Also retries seller payouts that
+// failed at the handoff.
 // Protected by CRON_SECRET (same value as cron_secret in Supabase Vault).
 import { timingSafeEqual } from 'node:crypto'
 import { NextResponse, type NextRequest } from 'next/server'
@@ -18,6 +19,7 @@ import { NoSavedCardError, createHold, markAuthorized } from '@/lib/payments/hol
 import { sendNotificationEmails } from '@/lib/notifications/send-emails'
 import { sendSafetyAlerts } from '@/lib/notifications/send-safety-alerts'
 import { checkPendingListings } from '@/lib/moderation/check-listing'
+import { retryPendingPayouts } from '@/lib/payments/payouts'
 import { siteUrl } from '@/lib/site-url'
 
 const MAX_AUCTIONS_PER_RUN = 10
@@ -87,16 +89,19 @@ export async function POST(req: NextRequest) {
     outcomes.push(await closeAuction(id))
   }
 
-  // 4. Listings still waiting for their automatic check.
+  // 4. Seller payouts that failed at the handoff.
+  const payouts = await retryPendingPayouts()
+
+  // 5. Listings still waiting for their automatic check.
   const moderation = await checkPendingListings()
 
-  // 5. Emails for notifications, including the ones the steps above just created.
+  // 6. Emails for notifications, including the ones the steps above just created.
   const emails = await sendNotificationEmails(await siteUrl())
 
-  // 6. Emergency contact emails (meetup agreed / done / cancelled).
+  // 7. Emergency contact emails (meetup agreed / done / cancelled).
   const safety = await sendSafetyAlerts()
 
-  return NextResponse.json({ released: stale?.length ?? 0, expired: expired?.length ?? 0, auctions: outcomes, moderation, emails, safety })
+  return NextResponse.json({ released: stale?.length ?? 0, expired: expired?.length ?? 0, auctions: outcomes, payouts, moderation, emails, safety })
 }
 
 async function closeAuction(listingId: number): Promise<Outcome> {

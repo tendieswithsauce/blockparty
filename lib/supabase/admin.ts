@@ -2,6 +2,7 @@
 // Service-role Supabase client: bypasses RLS and column grants. Server-only.
 // Use it only for writes users are not allowed to make themselves (e.g. the
 // Stripe IDs on profiles), and only after verifying who the user is.
+import 'server-only'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from './database.types'
 

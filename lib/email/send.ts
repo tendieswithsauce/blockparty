@@ -4,6 +4,8 @@
 // on a domain verified in Resend). If RESEND_API_KEY is missing, emails are
 // skipped with a warning so local dev still works.
 
+import 'server-only'
+
 type Email = { to: string; subject: string; html: string; text: string; idempotencyKey?: string }
 
 export async function sendEmail({ to, subject, html, text, idempotencyKey }: Email): Promise<boolean> {

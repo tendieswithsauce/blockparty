@@ -2,6 +2,7 @@
 // Emails emergency contacts (public.safety_alerts, queued by a database
 // trigger when a meetup time is agreed, and when it's done or cancelled).
 // Called by the per-minute cron route. Server-only.
+import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email/send'
 import { safetyAlertEmail } from '@/lib/email/templates'

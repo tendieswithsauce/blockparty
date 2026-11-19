@@ -1,6 +1,7 @@
 // lib/notifications/send-emails.ts
 // Emails queued notifications (public.notifications rows with
 // email_status = 'pending'). Called by the per-minute cron route. Server-only.
+import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email/send'
 import { notificationEmail } from '@/lib/email/templates'
