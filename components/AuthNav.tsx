@@ -16,6 +16,7 @@ import { signOut } from '@/app/auth/actions'
 import { NotificationBell } from '@/components/NotificationBell'
 import { Avatar } from '@/components/Avatar'
 import { claimAnonymousHistory, rememberPath } from '@/lib/track'
+import { useSellSheet } from '@/components/SellSheet'
 
 export type NavSection = 'browse' | 'auctions' | 'charities' | 'how' | null
 
@@ -24,8 +25,6 @@ type AuthState = 'loading' | 'signed-out' | Me
 
 /** Fired by the profile page after the photo or name changes. */
 export const PROFILE_CHANGED_EVENT = 'blockparty:profile-changed'
-/** Fired by the Sell tab when the dashboard is already open. */
-export const SELL_EVENT = 'blockparty:sell'
 
 export function AuthNav({ active = null }: { active?: NavSection }) {
   const [state, setState] = useState<AuthState>('loading')
@@ -170,25 +169,35 @@ function MobileTabBar({ state, active }: { state: AuthState; active: NavSection 
 function TabBar({ state, active, pathname, search }: { state: AuthState; active: NavSection; pathname: string; search: string }) {
   const signedIn = typeof state === 'object'
   const onAuctions = pathname === '/listings' && new URLSearchParams(search).get('type') === 'auction'
+  const sell = useSellSheet({ onDashboard: pathname === '/dashboard' })
 
+  // Blue bar with white labels; the current page is shown in a soft grey,
+  // with a light pill behind its icon.
   const tab = (on: boolean) =>
-    `flex-1 flex flex-col items-center justify-center gap-0.5 min-h-14 text-[11px] font-semibold ${
-      on ? 'text-[#F26B5B]' : 'text-slate-500 active:text-[#0E4D5C]'
+    `flex-1 flex flex-col items-center justify-center gap-0.5 min-h-14 text-[11px] font-semibold transition active:scale-95 ${
+      on ? 'text-slate-300' : 'text-white'
     }`
+  const icon = (on: boolean) =>
+    `flex items-center justify-center h-7 px-3 rounded-full transition ${on ? 'bg-white/15' : ''}`
 
   return (
     <nav
       id="mobile-tabbar"
       aria-label="Main"
-      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-slate-200 pb-[env(safe-area-inset-bottom)]"
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#0E4D5C] shadow-[0_-2px_12px_rgba(0,0,0,0.15)] pb-[env(safe-area-inset-bottom)]"
     >
+      {sell.sheet}
       <div className="flex max-w-lg mx-auto">
         <Link href="/listings" className={tab(pathname.startsWith('/listings') && !onAuctions)}>
-          <Search className="w-6 h-6" />
+          <span className={icon(pathname.startsWith('/listings') && !onAuctions)}>
+            <Search className="w-5 h-5" />
+          </span>
           Browse
         </Link>
         <Link href="/listings?type=auction" className={tab(onAuctions)}>
-          <Gavel className="w-6 h-6" />
+          <span className={icon(onAuctions)}>
+            <Gavel className="w-5 h-5" />
+          </span>
           Auctions
         </Link>
         {state === 'loading' ? (
@@ -196,43 +205,43 @@ function TabBar({ state, active, pathname, search }: { state: AuthState; active:
           <span className="flex-[3]" aria-hidden />
         ) : signedIn ? (
           <>
-            <Link
-              href="/dashboard?sell=1"
-              onClick={(e) => {
-                if (pathname === '/dashboard') {
-                  e.preventDefault()
-                  window.dispatchEvent(new Event(SELL_EVENT))
-                }
-              }}
-              className={tab(false)}
-            >
-              <span className="w-11 h-11 -mt-5 rounded-full bg-[#F26B5B] text-white flex items-center justify-center shadow-md ring-4 ring-white">
+            {/* Opens the new-listing sheet (or the payout prompt) right here, on any page. */}
+            <button type="button" onClick={sell.open} className={tab(false)}>
+              <span className="w-12 h-12 -mt-6 rounded-full bg-[#0E4D5C] text-white flex items-center justify-center shadow-lg ring-2 ring-[#F26B5B] transition active:scale-90 active:shadow-md">
                 <PlusCircle className="w-6 h-6" />
               </span>
               Sell
-            </Link>
+            </button>
             <Link href="/dashboard" className={tab(pathname === '/dashboard')}>
-              <LayoutGrid className="w-6 h-6" />
+              <span className={icon(pathname === '/dashboard')}>
+                <LayoutGrid className="w-5 h-5" />
+              </span>
               Dashboard
             </Link>
             <Link href="/profile" className={tab(pathname === '/profile')}>
-              <Avatar
-                path={state.avatarPath}
-                name={state.username}
-                size="xs"
-                className={pathname === '/profile' ? 'ring-2 ring-[#F26B5B]' : ''}
-              />
+              <span className={icon(pathname === '/profile')}>
+                <Avatar
+                  path={state.avatarPath}
+                  name={state.username}
+                  size="xs"
+                  className={pathname === '/profile' ? 'ring-2 ring-slate-300' : 'ring-1 ring-white/70'}
+                />
+              </span>
               Me
             </Link>
           </>
         ) : (
           <>
             <Link href="/charities" className={tab(active === 'charities')}>
-              <HeartHandshake className="w-6 h-6" />
+              <span className={icon(active === 'charities')}>
+                <HeartHandshake className="w-5 h-5" />
+              </span>
               Charities
             </Link>
             <Link href="/login" className={tab(pathname === '/login')}>
-              <LogIn className="w-6 h-6" />
+              <span className={icon(pathname === '/login')}>
+                <LogIn className="w-5 h-5" />
+              </span>
               Sign in
             </Link>
           </>

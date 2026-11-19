@@ -1,6 +1,7 @@
 // lib/stripe/server.ts
 // Server-only Stripe client. Never import this from a 'use client' file:
 // it reads STRIPE_SECRET_KEY.
+import 'server-only'
 import Stripe from 'stripe'
 
 let stripe: Stripe | null = null

@@ -1,6 +1,7 @@
 // lib/notifications/send-emails.ts
 // Emails queued notifications (public.notifications rows with
 // email_status = 'pending'). Called by the per-minute cron route. Server-only.
+import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email/send'
 import { notificationEmail } from '@/lib/email/templates'
@@ -8,11 +9,18 @@ import { notificationEmail } from '@/lib/email/templates'
 const BATCH = 25
 const MAX_ATTEMPTS = 5
 
-export async function sendNotificationEmails(siteUrl: string) {
+/**
+ * requestSiteUrl: the site the cron request came in on. The database's own
+ * setting (marketplace_settings.email_site_url) wins when set, so emails from
+ * the Dev project link to the dev site even though the cron runs on the live one.
+ */
+export async function sendNotificationEmails(requestSiteUrl: string) {
   // Without Resend configured, leave the queue alone (nothing is lost).
   if (!process.env.RESEND_API_KEY) return { sent: 0, failed: 0, skipped: 'RESEND_API_KEY not set' }
 
   const admin = createAdminClient()
+  const { data: settings } = await admin.from('marketplace_settings').select('email_site_url').maybeSingle()
+  const siteUrl = settings?.email_site_url ?? requestSiteUrl
   const { data: batch, error } = await admin.rpc('claim_notification_emails', { p_limit: BATCH })
   if (error) {
     console.error('notification emails: claim failed', error)

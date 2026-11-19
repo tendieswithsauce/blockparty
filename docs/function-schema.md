@@ -2,6 +2,8 @@
 
 Generated from the live Supabase database (schema `public`) on 2026-11-18.
 
+Trigger functions are not executable by `anon` or `authenticated` (they still fire normally).
+
 **Callable by** shows who has EXECUTE:
 - **anon** = signed-out visitors.
 - **auth** = signed-in members.
@@ -105,7 +107,7 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `notifications_sweep` | | void | service | definer | Scheduled sweep for time-based notices. |
 | `claim_notification_emails` | limit | table | service | definer | Queue of emails to send. |
 | `claim_safety_alerts` | limit | table | service | definer | Queue of emergency-contact emails. |
-| `auction_work_pending` | | boolean | service | definer | True when the auction cron has work; gates the pg_cron job. |
+| `auction_work_pending` | | boolean | service | definer | True when the cron has work (auctions, holds, emails, moderation, payout retries); gates the pg_cron job. |
 
 ## Admin (all check `is_admin()` inside)
 
@@ -132,6 +134,7 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | Function | Fires on | Does |
 |---|---|---|
 | `handle_new_user`, `handle_user_email_change` | auth users | Create or sync the profile. |
+| `lock_auction_with_bids` | listings | Once an auction has bids, the seller can't edit it or take it down. |
 | `set_updated_at` | many tables | Maintains `updated_at`. |
 | `listing_search_vector` | listings | Maintains the full-text search column. |
 | `listing_handoff_check` | listings | Requires at least one handoff method; validates delivery fee and radius. |

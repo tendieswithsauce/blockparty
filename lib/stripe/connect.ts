@@ -5,6 +5,7 @@
 // and transfers). Blockparty is the fees and losses collector, which needs the
 // loss-liability acknowledgement in Stripe > Settings > Connect > Platform profile.
 // Server-only.
+import 'server-only'
 import type Stripe from 'stripe'
 import { getStripe } from '@/lib/stripe/server'
 import { createAdminClient } from '@/lib/supabase/admin'

@@ -12,8 +12,11 @@ create table public.admins (
 );
 alter table public.admins enable row level security;
 revoke all on public.admins from anon, authenticated;
--- The site owner's account.
-insert into public.admins (user_id) values ('58538ba9-7511-4002-b46f-ece02a2f8da9');
+-- The site owner's account (only where it exists: a fresh project has no
+-- users yet; add the owner there after they sign up).
+insert into public.admins (user_id)
+select '58538ba9-7511-4002-b46f-ece02a2f8da9'
+ where exists (select 1 from auth.users where id = '58538ba9-7511-4002-b46f-ece02a2f8da9');
 
 create or replace function public.is_admin()
 returns boolean

@@ -33,6 +33,7 @@ type TransactionRow = {
   meetup_at: string | null
   meetup_deadline: string | null
   meetup_spot_id: string | null
+  payout_attempts: number
   picked_up_at: string | null
   platform_fee_cents: number
   proposal_note: string | null
@@ -353,14 +354,17 @@ export type Database = {
       marketplace_settings: {
         Row: {
           charity_fee_free_cap_cents: number
+          email_site_url: string | null
           id: boolean
         }
         Insert: {
           charity_fee_free_cap_cents?: number
+          email_site_url?: string | null
           id?: never
         }
         Update: {
           charity_fee_free_cap_cents?: number
+          email_site_url?: string | null
           id?: never
         }
         Relationships: []
@@ -662,6 +666,7 @@ export type Database = {
           meetup_at?: string | null
           meetup_deadline?: string | null
           meetup_spot_id?: string | null
+          payout_attempts?: number
           picked_up_at?: string | null
           platform_fee_cents?: number
           proposal_note?: string | null

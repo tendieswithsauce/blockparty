@@ -8,6 +8,7 @@ import { getCurrentUser } from '@/lib/auth/current-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getStripe, stripeConfigured } from '@/lib/stripe/server'
 import { CANCEL_REASONS } from '@/lib/orders'
+import { payoutSeller } from '@/lib/payments/payouts'
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string }
 
@@ -60,28 +61,9 @@ export async function completeHandoff(
   }
 
   // 2. Pay the seller. The buyer has paid either way, so if this fails the
-  //    sale still completes and the payout is retried (see payoutPending).
-  let transferId: string | null = null
-  const { data: seller } = await admin.from('profiles').select('stripe_account_id').eq('id', txn.seller_id).single()
-  if (seller?.stripe_account_id) {
-    try {
-      const transfer = await stripe.transfers.create(
-        {
-          amount: payoutCents,
-          currency: 'cad',
-          destination: seller.stripe_account_id,
-          transfer_group: `txn_${txn.id}`,
-          ...(chargeId ? { source_transaction: chargeId } : {}),
-          description: `Blockparty order #${txn.id}`,
-          metadata: { transaction_id: String(txn.id), listing_id: String(txn.listing_id) },
-        },
-        { idempotencyKey: `transfer-${txn.id}` },
-      )
-      transferId = transfer.id
-    } catch (err) {
-      console.error('completeHandoff: transfer failed', txn.id, err)
-    }
-  }
+  //    sale still completes and the cron route retries the payout
+  //    (lib/payments/payouts.ts, same idempotency key: never paid twice).
+  const transferId = await payoutSeller(txn, chargeId)
 
   await admin.rpc('complete_order', { p_transaction_id: txn.id, p_transfer_id: transferId })
   return { ok: true, payoutCents, payoutPending: transferId === null }
@@ -91,7 +73,7 @@ export async function completeHandoff(
 export async function cancelOrder(transactionId: number, reason: string): Promise<Result> {
   const user = await getCurrentUser()
   if (!user) return { ok: false, error: 'Please sign in.' }
-  if (!(reason in CANCEL_REASONS.buyer) && !(reason in CANCEL_REASONS.seller)) {
+  if (!Object.hasOwn(CANCEL_REASONS.buyer, reason) && !Object.hasOwn(CANCEL_REASONS.seller, reason)) {
     return { ok: false, error: 'Choose a reason.' }
   }
 

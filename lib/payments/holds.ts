@@ -2,6 +2,7 @@
 // Card holds: a PaymentIntent with manual capture on the buyer's saved card.
 // Used by Buy Now (buyer present) and by auction closing (buyer not present).
 // Server-only.
+import 'server-only'
 import type Stripe from 'stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getStripe } from '@/lib/stripe/server'
