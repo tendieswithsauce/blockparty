@@ -13,6 +13,16 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    # Major upgrades we take on purpose, not from a weekly bot:
+    # - typescript: 7 (the native compiler) fails our build as of 2026-11.
+    # - @types/node: must match the Node version the site runs on (24, the
+    #   same as CI's setup-node), not the newest Node.
+    # Minor and patch updates for both still come through.
+    ignore:
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /
