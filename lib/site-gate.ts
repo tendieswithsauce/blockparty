@@ -5,7 +5,7 @@
 // anywhere (e.g. the dev site, if Vercel's own login wall is switched off);
 // SITE_GATE=off turns it off. The password is SITE_GATE_PASSWORD; if it is
 // missing, nobody can get in, so the wall fails closed.
-import { createHash, timingSafeEqual } from 'node:crypto'
+import { scryptSync, timingSafeEqual } from 'node:crypto'
 
 export const GATE_COOKIE = 'bp_site_gate'
 export const GATE_PATH = '/gate'
@@ -20,9 +20,20 @@ function password() {
   return process.env.SITE_GATE_PASSWORD || ''
 }
 
-/** The cookie holds a hash, never the password; changing the password signs everyone out. */
+/**
+ * The cookie holds a slow (scrypt) hash, never the password, so a copied
+ * cookie can't easily be brute-forced back into the password. Changing the
+ * password signs everyone out. The hash of the real password is computed once
+ * per server instance, so page loads stay fast.
+ */
 function tokenFor(pw: string) {
-  return createHash('sha256').update(`blockparty-site-gate:${pw}`).digest('hex')
+  return scryptSync(pw, 'blockparty-site-gate', 32).toString('hex')
+}
+
+let cached: { pw: string; token: string } | null = null
+function expectedToken(pw: string) {
+  if (cached?.pw !== pw) cached = { pw, token: tokenFor(pw) }
+  return cached.token
 }
 
 function safeEqual(a: string, b: string) {
@@ -33,14 +44,15 @@ function safeEqual(a: string, b: string) {
 
 export function hasGatePass(cookieValue: string | undefined) {
   const pw = password()
-  return Boolean(pw && cookieValue && safeEqual(cookieValue, tokenFor(pw)))
+  return Boolean(pw && cookieValue && safeEqual(cookieValue, expectedToken(pw)))
 }
 
 /** Returns the cookie value to set if the password is right, otherwise null. */
 export function checkGatePassword(attempt: string) {
   const pw = password()
-  if (!pw || !safeEqual(tokenFor(attempt), tokenFor(pw))) return null
-  return tokenFor(pw)
+  if (!pw) return null
+  const token = expectedToken(pw)
+  return safeEqual(tokenFor(attempt), token) ? token : null
 }
 
 /** Only same-site paths, so the wall can't be used as an open redirect. */
