@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { TesterFeedback } from '@/components/admin/TesterFeedback'
 import { CheckCircle2, Flag, ShieldAlert, XCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCents } from '@/lib/money'
@@ -72,6 +73,7 @@ export default function AdminPage() {
             <h1 className="text-3xl font-extrabold text-[#0E4D5C]">Admin</h1>
             {overview && <OverviewCards o={overview} />}
             <Reports rows={reports} onDone={load} />
+            <TesterFeedback />
             <ReviewQueue items={queue} onDone={load} />
             <CharityQueue items={charities} onDone={load} />
             {feeCap !== null && <FeeCapSetting cents={feeCap} onDone={load} />}

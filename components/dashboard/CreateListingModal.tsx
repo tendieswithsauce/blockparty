@@ -384,7 +384,7 @@ export function CreateListingModal({
                 onChange={(e) => setListingType(e.target.value as 'fixed' | 'auction')}
                 className={inputClass}
               >
-                <option value="fixed">Set price</option>
+                <option value="fixed">Set Price</option>
                 <option value="auction">Auction</option>
               </select>
             </div>

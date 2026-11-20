@@ -95,7 +95,7 @@ async function CharityContent({ slug }: { slug: string }) {
                       <p className="text-xs text-slate-500">
                         {l.listing_type === 'auction'
                           ? `Silent auction · ${l.bid_count} ${l.bid_count === 1 ? 'bid' : 'bids'}`
-                          : 'Set price'}
+                          : 'Set Price'}
                       </p>
                     </div>
                   </Link>

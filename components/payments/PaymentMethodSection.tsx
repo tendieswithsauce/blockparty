@@ -10,10 +10,13 @@ import {
   completeSetupIntent,
   createSetupIntent,
   getSavedCard,
+  saveTestCard,
   type SavedCard,
 } from '@/app/profile/payment-actions'
 
 const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+// Test keys (dev and alpha): offer Stripe's test Visa in one tap.
+const testMode = Boolean(publishableKey?.startsWith('pk_test_'))
 // Load Stripe.js once, outside render.
 const stripePromise = publishableKey ? loadStripe(publishableKey) : null
 
@@ -98,6 +101,19 @@ export function PaymentMethodSection() {
     setStarting(false)
   }
 
+  async function addTestCard() {
+    setStarting(true)
+    setError('')
+    setMessage('')
+    const res = await saveTestCard()
+    if (res.ok) {
+      setCard(res.data)
+      setClientSecret(null)
+      setMessage('Test card saved.')
+    } else setError(res.error)
+    setStarting(false)
+  }
+
   function onSaved(saved: SavedCard) {
     setCard(saved)
     setClientSecret(null)
@@ -143,6 +159,21 @@ export function PaymentMethodSection() {
           >
             {starting ? 'Loading…' : card ? 'Replace card' : 'Add a card'}
           </button>
+          {testMode && (
+            <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 space-y-2">
+              <p>
+                <strong>Test mode:</strong> no real money moves. Use Stripe&apos;s test Visa instead of a real card.
+              </p>
+              <button
+                type="button"
+                onClick={addTestCard}
+                disabled={starting}
+                className="w-full py-2.5 rounded-lg bg-amber-500 text-white font-bold disabled:opacity-60"
+              >
+                Use a test card (Visa 4242)
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

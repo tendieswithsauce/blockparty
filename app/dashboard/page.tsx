@@ -521,7 +521,7 @@ export default function DashboardPage() {
                     <p className="text-xs text-slate-500 mt-1">
                       {l.listing_type === 'auction'
                         ? `${l.bid_count} ${l.bid_count === 1 ? 'bid' : 'bids'}${l.ends_at ? ` · ends ${new Date(l.ends_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}` : ''}${l.reserve ? ` · reserve ${formatCents(l.reserve.reserve_cents)}${l.reserve_met ? ' (met)' : ''}` : ' · no reserve'}`
-                        : 'Set price'}
+                        : 'Set Price'}
                       {l.watch_count > 0 && ` · ${l.watch_count} watching`}
                     </p>
                     {l.listing_type === 'fixed' && l.status === 'active' && !l.converted_at && (
@@ -636,7 +636,7 @@ export default function DashboardPage() {
                       <span>
                         {formatCents(w.listing.display_price_cents ?? 0)}
                         <span className="ml-2 text-xs font-semibold text-slate-500">
-                          {w.listing.listing_type === 'auction' ? 'Auction' : 'Set price'}
+                          {w.listing.listing_type === 'auction' ? 'Auction' : 'Set Price'}
                         </span>
                       </span>
                     )}
