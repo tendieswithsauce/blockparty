@@ -21,6 +21,8 @@ import { ShareButton } from '@/components/listing/ShareButton'
 import { ListingQuestions } from '@/components/listing/ListingQuestions'
 import { ViewTracker } from '@/components/listing/ViewTracker'
 import { SafetyMenu } from '@/components/SafetyMenu'
+import { ConvertToAuctionButton } from '@/components/listing/ConvertToAuctionButton'
+import { getCurrentUser } from '@/lib/auth/current-user'
 import { Ban } from 'lucide-react'
 import { type HandoffOptions, handoffSummary } from '@/lib/handoff'
 
@@ -53,7 +55,7 @@ async function ListingContent({ id }: { id: string }) {
   const { data: listing } = await supabase
     .from('listings')
     .select(
-      'id, seller_id, title, description, listing_type, status, condition, area:areas(name, city), category:categories!category_id(id, name, parent:parent_id(id, name)), image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, watch_count, silent, charity:charities(name, slug), offers_meetup, offers_pickup, delivery_fee_cents, delivery_km, extensions, created_at',
+      'id, seller_id, title, description, listing_type, status, condition, area:areas(name, city), category:categories!category_id(id, name, parent:parent_id(id, name)), image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, watch_count, silent, charity:charities(name, slug), offers_meetup, offers_pickup, delivery_fee_cents, delivery_km, extensions, converted_at, created_at',
     )
     .eq('id', listingId)
     .maybeSingle()
@@ -82,6 +84,10 @@ async function ListingContent({ id }: { id: string }) {
   // Blocked either way: no buying, bidding or questions (enforced in the database too).
   const { data: blockRows } = await supabase.rpc('is_blocked_with', { p_other: listing.seller_id })
   const block = blockRows?.[0]?.blocked ? { byMe: blockRows[0].by_me } : null
+  // The seller can switch their own set-price listing to an auction (once).
+  const viewer = await getCurrentUser()
+  const canConvert =
+    viewer?.id === listing.seller_id && listing.listing_type === 'fixed' && listing.status === 'active' && !listing.converted_at
   const memberSince = seller?.created_at
     ? new Date(seller.created_at).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' })
     : null
@@ -103,7 +109,7 @@ async function ListingContent({ id }: { id: string }) {
                 listing.listing_type === 'auction' ? 'bg-[#F26B5B]' : 'bg-[#0E4D5C]'
               }`}
             >
-              {listing.listing_type === 'auction' ? 'Auction' : 'Set price'}
+              {listing.listing_type === 'auction' ? 'Auction' : 'Set Price'}
             </span>
             <div className="flex items-center gap-2">
               <ShareButton listingId={listing.id} title={listing.title} />
@@ -210,6 +216,17 @@ async function ListingContent({ id }: { id: string }) {
               status: listing.status,
               priceCents: listing.buy_now_price_cents ?? 0,
               handoff,
+            }}
+          />
+        )}
+
+        {canConvert && (
+          <ConvertToAuctionButton
+            listing={{
+              id: listing.id,
+              title: listing.title,
+              priceCents: listing.buy_now_price_cents ?? 0,
+              watchCount: listing.watch_count,
             }}
           />
         )}

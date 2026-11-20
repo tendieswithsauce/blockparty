@@ -400,6 +400,15 @@ export default function ProfilePage() {
             </nav>
           </>
         )}
+        <p className="mt-8 text-center text-xs text-slate-500">
+          <Link href="/terms" className="underline">
+            Terms of Use
+          </Link>
+          {' · '}
+          <Link href="/privacy" className="underline">
+            Privacy Policy
+          </Link>
+        </p>
       </main>
     </div>
   )

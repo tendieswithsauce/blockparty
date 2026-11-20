@@ -96,6 +96,12 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `report_content` | target_type, reason, details, listing_id, user_id, question_id | void | auth, service | definer | File a report. |
 | `report_reason_text` | reason | text | anon, auth, service | invoker | Human label for a report reason. |
 
+## Tester feedback
+
+| Function | Args | Returns | Callable by | Security | Purpose |
+|---|---|---|---|---|---|
+| `submit_feedback` | category, message, page_path, viewport, user_agent, environment | bigint | anon, auth, service | definer | Saves a note from the dev site's Feedback button to `tester_feedback`; 30 an hour per account, 60 an hour signed out. |
+
 ## Saved searches, engagement and notifications
 
 | Function | Args | Returns | Callable by | Security | Purpose |
@@ -126,6 +132,8 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `admin_reports` | | table | auth, service | Open reports. |
 | `admin_resolve_report` | report_id, action, note | void | auth, service | dismiss / handled / remove_listing / remove_question. |
 | `admin_handoff_locations` | transaction_id | table | auth, service | Handoff GPS for one order. |
+| `admin_feedback` | | table | auth, service | Tester feedback from the dev site's Feedback button, open items first. |
+| `admin_set_feedback_status` | id, status, note | void | auth, service | Mark tester feedback done (or new again), with an optional note. |
 
 ## Formatting helpers
 

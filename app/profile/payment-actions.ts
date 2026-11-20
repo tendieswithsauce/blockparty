@@ -130,6 +130,40 @@ export async function createSetupIntent(): Promise<Result<{ clientSecret: string
   }
 }
 
+/** True when Stripe runs on test keys (dev and alpha): no real card can be charged. */
+function stripeTestMode() {
+  return Boolean(process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_'))
+}
+
+/**
+ * Test mode only: save Stripe's test Visa (4242 4242 4242 4242) in one tap,
+ * so testers don't have to type card numbers. Refuses with live keys.
+ */
+export async function saveTestCard(): Promise<Result<SavedCard>> {
+  const user = await currentUser()
+  if (!user) return { ok: false, error: 'Please sign in again.' }
+  if (!stripeConfigured()) return { ok: false, error: NOT_CONFIGURED }
+  if (!stripeTestMode()) return { ok: false, error: 'Test cards only work in test mode.' }
+
+  try {
+    const customer = await ensureCustomer(user)
+    // pm_card_visa is Stripe's ready-made test card; confirming the
+    // SetupIntent attaches a fresh copy of it to this customer.
+    const intent = await getStripe().setupIntents.create({
+      customer,
+      payment_method: 'pm_card_visa',
+      automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
+      confirm: true,
+      usage: 'off_session',
+      metadata: { supabase_user_id: user.id, test_card: 'true' },
+    })
+    return completeSetupIntent(intent.id)
+  } catch (err) {
+    console.error('saveTestCard failed', err)
+    return { ok: false, error: 'Could not add the test card. Please try again.' }
+  }
+}
+
 /** Finishes saving a card after stripe.confirmSetup succeeds in the browser. */
 export async function completeSetupIntent(setupIntentId: string): Promise<Result<SavedCard>> {
   const user = await currentUser()

@@ -1125,6 +1125,37 @@ export type Database = {
         Args: { p_listing_id: number }
         Returns: { is_leading: boolean; my_bid_cents: number | null }[]
       }
+      admin_feedback: {
+        Args: never
+        Returns: {
+          admin_note: string | null
+          category: 'bug' | 'idea' | 'question' | 'other'
+          created_at: string
+          environment: string | null
+          id: number
+          message: string
+          page_path: string | null
+          status: 'new' | 'done'
+          user_agent: string | null
+          username: string | null
+          viewport: string | null
+        }[]
+      }
+      admin_set_feedback_status: {
+        Args: { p_id: number; p_note?: string | null; p_status: 'new' | 'done' }
+        Returns: undefined
+      }
+      submit_feedback: {
+        Args: {
+          p_category: 'bug' | 'idea' | 'question' | 'other'
+          p_environment?: string | null
+          p_message: string
+          p_page_path?: string | null
+          p_user_agent?: string | null
+          p_viewport?: string | null
+        }
+        Returns: number
+      }
       admin_handoff_locations: {
         Args: { p_transaction_id: number }
         Returns: {

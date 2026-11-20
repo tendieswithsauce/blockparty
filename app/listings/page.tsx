@@ -1,9 +1,9 @@
 // app/listings/page.tsx
 // Public browse page. The search, filters and results are in ListingsBrowser.
 import { Suspense } from 'react'
-import Link from 'next/link'
 import { Home as HomeIcon } from 'lucide-react'
 import { SiteHeader } from '@/components/SiteHeader'
+import { SiteFooter } from '@/components/SiteFooter'
 import { ListingsBrowser } from '@/components/listing/ListingsBrowser'
 
 export default function ListingsPage() {
@@ -35,34 +35,7 @@ export default function ListingsPage() {
         </Suspense>
       </main>
 
-      {/* Deep Teal Footer */}
-      <footer className="bg-[#0E4D5C] text-white py-12 px-6 mt-16">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-          <div className="space-y-2">
-            <span className="text-2xl font-extrabold text-[#F26B5B]">
-              Blockparty
-            </span>
-            <p className="text-sm text-slate-200 max-w-xs">
-              Built by neighbors, for neighbors. Bid, buy, and sell safely in your neighborhood.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-6 text-sm font-medium text-slate-200">
-            <Link href="/listings" className="hover:text-white transition">
-              Browse Local
-            </Link>
-            <Link href="/listings?type=auction" className="hover:text-white transition">
-              Active Auctions
-            </Link>
-            <Link href="/#how-it-works" className="hover:text-white transition">
-              How It Works
-            </Link>
-            <Link href="/signup" className="hover:text-white transition">
-              Create Account
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }
