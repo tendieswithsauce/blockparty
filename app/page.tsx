@@ -77,11 +77,11 @@ export default function HomePage() {
         <section className="max-w-6xl mx-auto px-6 pt-6 pb-8 text-center">
           <div className="max-w-2xl mx-auto space-y-4">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#A8D5BA]/40 text-[#0E4D5C] text-xs font-bold uppercase tracking-wider">
-              <HomeIcon className="w-3.5 h-3.5" /> Your neighbourhood marketplace
+              <HomeIcon className="w-3.5 h-3.5" /> Your NEW local marketplace
             </div>
             <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-[#F26B5B]">Blockparty</h1>
             <p className="text-xl sm:text-2xl font-medium text-[#334155]">
-              Buy, sell and bid with neighbours. Pay only once you have the item in hand.
+              Buy, sell and bid with your neighbours!
             </p>
           </div>
 
@@ -162,7 +162,7 @@ export default function HomePage() {
             <div className="flex-1">
               <h2 className="text-xl sm:text-2xl font-extrabold">Support local charities</h2>
               <p className="text-slate-600 mt-1">
-                Registered Canadian charities sell on Blockparty fee-free, up to a yearly allowance, and can run silent
+                Registered Canadian charities sell on Blockparty with no fees, up to a yearly allowance, and can run silent
                 auctions for fundraising.
               </p>
             </div>

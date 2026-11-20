@@ -24,7 +24,9 @@ const CATEGORIES: { value: Category; label: string; icon: typeof Bug }[] = [
 ]
 
 export function FeedbackWidget() {
-  if (!ENABLED) return null
+  const pathname = usePathname()
+  // Not on the password wall (lib/site-gate.ts).
+  if (!ENABLED || pathname === '/gate') return null
   return <Widget />
 }
 
