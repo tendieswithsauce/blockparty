@@ -352,6 +352,7 @@ export default function DashboardPage() {
       done: Boolean(data?.hasCard),
       icon: CreditCard,
       title: 'Add a payment method',
+      stripe: true,
       body: 'Needed to bid or buy. You are only charged after you meet the seller and accept the item.',
       action: (
         <Link href="/profile#payment-method" className="px-4 py-2 rounded-full bg-[#0E4D5C] text-white text-sm font-semibold hover:bg-[#0b3f4b]">
@@ -363,6 +364,7 @@ export default function DashboardPage() {
       done: payoutsReady,
       icon: Landmark,
       title: 'Set up payouts',
+      stripe: true,
       body: 'Connect a bank account with Stripe so we can pay you when your item is picked up.',
       action: <SetUpPayoutsButton label={payouts?.accountId ? 'Finish payout setup' : 'Set up payouts'} />,
     },
@@ -454,7 +456,6 @@ export default function DashboardPage() {
             <div className="h-2 rounded-full bg-slate-100 mb-6 overflow-hidden">
               <div className="h-full bg-[#0E4D5C] transition-all" style={{ width: `${(stepsDone / steps.length) * 100}%` }} />
             </div>
-            <SecuredByStripe className="mb-2" text="Cards and payouts are handled by Stripe." />
             <ul className="divide-y">
               {steps.map((step) => (
                 <li key={step.title} className="flex flex-wrap items-center gap-4 py-4">
@@ -467,6 +468,7 @@ export default function DashboardPage() {
                   <div className="flex-1 min-w-[200px]">
                     <p className={`font-semibold ${step.done ? 'text-slate-400 line-through' : ''}`}>{step.title}</p>
                     <p className="text-sm text-slate-500">{step.body}</p>
+                    {step.stripe && !step.done && <StripeBadge size="sm" className="mt-2" />}
                   </div>
                   {!step.done && step.action}
                 </li>
@@ -496,10 +498,7 @@ export default function DashboardPage() {
             <span className="flex items-center gap-2 text-sm">
               <Landmark className="w-4 h-4 text-green-600" /> Payouts are active. Earnings are sent to your bank as soon as the buyer accepts the item.
             </span>
-            <div className="flex items-center gap-3">
-              <StripeBadge size="sm" />
-              <PayoutDashboardButton />
-            </div>
+            <PayoutDashboardButton />
           </div>
         )}
 

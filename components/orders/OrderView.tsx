@@ -712,7 +712,6 @@ function HandoffForm({
       <button type="submit" disabled={saving} className={`${primaryBtn} w-full`}>
         {saving ? 'Completing…' : 'Complete sale'}
       </button>
-      <SecuredByStripe text="The charge and your payout are handled by Stripe." />
       <LocationNote />
     </form>
   )
@@ -906,7 +905,13 @@ function CancelOrder({
             {role === 'buyer'
               ? "The hold on your card is released and you won't be charged."
               : "The buyer's hold is released and they won't be charged."}{' '}
-            {order.listing?.listing_type === 'fixed' ? 'The item goes back on sale.' : 'The auction stays closed.'}
+            {order.listing?.listing_type === 'fixed'
+              ? role === 'seller'
+                ? 'Your listing is paused, and you can relist it in one tap.'
+                : 'The seller can put the item back up for sale.'
+              : role === 'buyer' || reason === 'buyer_no_show'
+                ? 'The item is offered to the next-highest bidder, if there is one.'
+                : 'The auction ends without a sale, and you can relist it.'}
           </p>
           <label className="block">
             <span className="font-semibold text-slate-700">Reason</span>

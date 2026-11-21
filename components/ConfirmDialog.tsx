@@ -27,16 +27,23 @@ export function ConfirmDialog({
   hideCancel?: boolean
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null)
-
+  // Latest values for the Escape handler, without re-running the effects.
+  const latest = useRef({ busy, onCancel })
   useEffect(() => {
-    // Focus "Cancel" so a stray Enter press doesn't commit.
+    latest.current = { busy, onCancel }
+  })
+
+  // Focus "Cancel" once, when the dialog opens, so a stray Enter press doesn't
+  // commit. (Doing it on every render stole focus from selects inside the
+  // dialog and closed the picker on phones.)
+  useEffect(() => {
     cancelRef.current?.focus()
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) onCancel()
+      if (e.key === 'Escape' && !latest.current.busy) latest.current.onCancel()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [busy, onCancel])
+  }, [])
 
   return (
     <div

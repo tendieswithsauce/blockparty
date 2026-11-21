@@ -12,7 +12,6 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { HandoffChoice, HandoffDeadlineNote } from '@/components/listing/HandoffChoice'
 import { type HandoffMethod, type HandoffOptions, availableMethods, handoffDeadline } from '@/lib/handoff'
 import { MAX_PRICE_CENTS, dollarsToCents, formatCents } from '@/lib/money'
-import { SecuredByStripe } from '@/components/StripeBadge'
 
 type ListingInfo = {
   id: number
@@ -315,7 +314,6 @@ export function SilentBidPanel({ listing }: { listing: ListingInfo }) {
             card is only charged once you&apos;ve checked the item. <strong>Bids can&apos;t be withdrawn.</strong>
           </p>
           {endsAt && <HandoffDeadlineNote deadline={handoffDeadline(new Date(endsAt))} auction />}
-          <SecuredByStripe text="The hold and payment are handled by Stripe." />
         </ConfirmDialog>
       )}
     </div>

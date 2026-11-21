@@ -15,7 +15,6 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { HandoffChoice, HandoffDeadlineNote } from '@/components/listing/HandoffChoice'
 import { type HandoffMethod, type HandoffOptions, availableMethods, handoffDeadline, methodTitle } from '@/lib/handoff'
 import { buyNow, cancelPurchase, confirmPurchase } from '@/app/purchases/actions'
-import { SecuredByStripe } from '@/components/StripeBadge'
 
 type ListingInfo = { id: number; title: string; sellerId: string; status: string; priceCents: number; handoff: HandoffOptions }
 
@@ -243,7 +242,6 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
             only charged once you&apos;ve checked the item and accepted it ({methodTitle(method).toLowerCase()}).
           </p>
           <HandoffDeadlineNote deadline={handoffDeadline(openedAt)} auction={false} />
-          <SecuredByStripe text="The hold and payment are handled by Stripe." />
           <p>
             You can cancel within {BUY_NOW_CANCEL_WINDOW_SECONDS / 60} minutes if you change your mind. After that the
             purchase is final.
