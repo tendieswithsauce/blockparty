@@ -21,6 +21,12 @@ export const metadata: Metadata = {
   },
   description:
     "Bid, buy and sell safely with neighbors. Pay only when you accept the item, and meet at safe public spots.",
+  // iPhone "Add to Home Screen": open in its own window, like the Android app.
+  appleWebApp: {
+    capable: true,
+    title: "Blockparty",
+    statusBarStyle: "default",
+  },
 };
 
 // Phones: fill the screen edge to edge (the bottom tab bar pads for the home indicator).
