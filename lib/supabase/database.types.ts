@@ -1260,6 +1260,9 @@ export type Database = {
         Returns: undefined
       }
       relist_listing: { Args: { p_listing_id: number }; Returns: undefined }
+      end_my_listing: { Args: { p_listing_id: number }; Returns: undefined }
+      delete_my_listing: { Args: { p_listing_id: number }; Returns: string[] }
+      set_listing_price: { Args: { p_listing_id: number; p_price_cents: number }; Returns: undefined }
       relist_auction: {
         Args: { p_listing_id: number; p_duration_days: number; p_price_cents: number; p_reserve_cents?: number | null }
         Returns: number

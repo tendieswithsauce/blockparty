@@ -29,6 +29,7 @@ import { CreateListingModal } from '@/components/dashboard/CreateListingModal'
 import { SavedSearches } from '@/components/dashboard/SavedSearches'
 import { ConvertToAuctionModal } from '@/components/dashboard/ConvertToAuctionModal'
 import { RelistAuctionModal } from '@/components/dashboard/RelistAuctionModal'
+import { ManageListing, canManage } from '@/components/listing/ManageListing'
 import { PayoutDashboardButton, SetUpPayoutsButton } from '@/components/dashboard/PayoutButton'
 import { getPayoutStatus } from '@/app/payouts/actions'
 import type { PayoutStatus } from '@/lib/stripe/connect'
@@ -568,8 +569,8 @@ export default function DashboardPage() {
               {shownListings.map((l) => {
                 const live = l.status === 'active'
                 return (
-                  <li key={l.id} className="border rounded-xl overflow-hidden flex flex-col">
-                    <div className="relative aspect-[4/3] bg-slate-100">
+                  <li key={l.id} className="border rounded-xl flex flex-col">
+                    <div className="relative aspect-[4/3] bg-slate-100 rounded-t-xl overflow-hidden">
                       {l.image_paths?.[0] && (
                         // eslint-disable-next-line @next/next/no-img-element -- Supabase public URL
                         <img
@@ -592,7 +593,7 @@ export default function DashboardPage() {
                             : (STATUS_LABELS[l.status] ?? l.status)}
                       </span>
                     </div>
-                    <div className={`p-3 sm:p-4 flex-1 ${live ? '' : 'bg-slate-50'}`}>
+                    <div className={`p-3 sm:p-4 flex-1 rounded-b-xl ${live ? '' : 'bg-slate-50'}`}>
                       <Link
                         href={`/listings/${l.id}`}
                         className={`block text-sm sm:text-base font-semibold line-clamp-2 sm:line-clamp-1 hover:text-[#F26B5B] ${live ? '' : 'text-slate-500'}`}
@@ -651,6 +652,24 @@ export default function DashboardPage() {
                             <RotateCcw className="w-4 h-4" /> Relist
                           </button>
                         ))}
+                      {canManage(l) && (
+                        <ManageListing
+                          variant="menu"
+                          listing={{
+                            id: l.id,
+                            title: l.title,
+                            listingType: l.listing_type,
+                            status: l.status,
+                            priceCents: l.buy_now_price_cents,
+                            bidCount: l.bid_count,
+                          }}
+                          onDone={(result, message) => {
+                            setNotice({ kind: 'success', text: message })
+                            if (result === 'ended') setListingView('inactive')
+                            load()
+                          }}
+                        />
+                      )}
                     </div>
                   </li>
                 )

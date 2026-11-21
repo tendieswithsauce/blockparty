@@ -44,6 +44,9 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `cancel_order` | transaction_id, user_id, reason | text | service | definer | Cancels an order with a reason. Set Price listings pause (inactive); an auction the buyer backed out of goes back to active so close_auction offers it to the next bidder. |
 | `passes_to_next_bidder` | transactions row | boolean | (internal) | invoker | Did the buyer back out (buyer cancelled, or seller reported a buyer no-show)? |
 | `relist_listing` | listing_id | void | auth, service | definer | Seller puts a paused Set Price listing back up. |
+| `end_my_listing` | listing_id | void | auth, service | definer | Seller takes a listing off sale (inactive). Auctions only before any bids; an ended auction can then be relisted. |
+| `delete_my_listing` | listing_id | text[] | auth, service | definer | Seller deletes a listing that never had an order or a bid; returns photo paths no other listing uses (the app removes them from the seller's folder). |
+| `set_listing_price` | listing_id, price_cents | void | auth, service | definer | Seller changes a Set Price listing's price ($10–$1,000, no open order). Watchers get the existing price-drop alert. Members can no longer update listings directly; every change goes through a function. |
 | `relist_auction` | listing_id, duration_days, price_cents, reserve_cents | bigint (new listing id) | auth, service | invoker | Relists an auction that ended without a sale as a new listing (same details and photos); runs create_listing with the seller's own rights. |
 | `mark_relisted` | old_id, new_id | void | auth, service | definer | Sets listings.relisted_as on the old auction (only from relist_auction). |
 | `release_stale_purchases` | | table | service | definer | Finds stale pending purchases to release. |

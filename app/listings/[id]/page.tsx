@@ -11,6 +11,7 @@ import { areaLabel } from '@/lib/areas'
 import { conditionLabel } from '@/lib/categories'
 import { SiteHeader } from '@/components/SiteHeader'
 import { PhotoGallery } from '@/components/listing/PhotoGallery'
+import { ManageListingCard } from '@/components/listing/ManageListingCard'
 import { BidPanel } from '@/components/listing/BidPanel'
 import { SilentBidPanel } from '@/components/listing/SilentBidPanel'
 import { BuyNowPanel } from '@/components/listing/BuyNowPanel'
@@ -216,6 +217,19 @@ async function ListingContent({ id }: { id: string }) {
               status: listing.status,
               priceCents: listing.buy_now_price_cents ?? 0,
               handoff,
+            }}
+          />
+        )}
+
+        {viewer?.id === listing.seller_id && (listing.status === 'active' || listing.status === 'inactive') && (
+          <ManageListingCard
+            listing={{
+              id: listing.id,
+              title: listing.title,
+              listingType: listing.listing_type,
+              status: listing.status,
+              priceCents: listing.buy_now_price_cents,
+              bidCount: listing.bid_count,
             }}
           />
         )}
