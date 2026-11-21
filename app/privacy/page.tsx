@@ -42,8 +42,9 @@ export default function PrivacyPage() {
               <ul>
                 <li>
                   <strong>Account details:</strong> email address, password (stored only as a secure hash by our
-                  authentication provider), username, and optionally your full name, phone number and profile photo. If you
-                  sign in with Google, we receive your name and email address from Google.
+                  authentication provider), username, full name, phone number (so we can reach you about an order or a
+                  safety concern), and optionally a profile photo. If you sign in with Google, we receive your name and email
+                  address from Google.
                 </li>
                 <li>
                   <strong>Location and addresses:</strong> your neighbourhood (area), and if you choose to offer home pickup

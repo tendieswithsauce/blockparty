@@ -9,6 +9,7 @@ import { after, NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { safeNextPath } from '@/lib/auth/redirect'
 import { sendWelcomeEmailOnce } from '@/lib/email/welcome'
+import { afterSignIn } from '@/lib/auth/onboarding'
 
 const ALLOWED_TYPES: EmailOtpType[] = ['signup', 'email', 'recovery', 'invite', 'email_change', 'magiclink']
 
@@ -24,8 +25,10 @@ export async function GET(request: NextRequest) {
     if (!error) {
       // Email confirmed: welcome email, sent once.
       const userId = data.user?.id
-      if (userId && type !== 'recovery') after(() => sendWelcomeEmailOnce(userId, origin))
-      return NextResponse.redirect(`${origin}${next}`)
+      if (!userId || type === 'recovery') return NextResponse.redirect(`${origin}${next}`)
+      const target = await afterSignIn(userId, next, { firstTime: true })
+      after(() => sendWelcomeEmailOnce(userId, origin))
+      return NextResponse.redirect(`${origin}${target}`)
     }
   }
 

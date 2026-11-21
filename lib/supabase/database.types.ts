@@ -1194,6 +1194,7 @@ export type Database = {
         Args: { p_accuracy_m?: number | null; p_lat: number; p_lng: number; p_transaction_id: number }
         Returns: undefined
       }
+      relist_listing: { Args: { p_listing_id: number }; Returns: undefined }
       remove_question: { Args: { p_question_id: number }; Returns: undefined }
       claim_safety_alerts: {
         Args: { p_limit?: number }

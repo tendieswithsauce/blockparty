@@ -4,13 +4,13 @@
 // updates on sign-in/out. Renders three pieces:
 //   - desktop (md and up): bell, Dashboard, Admin, avatar (profile), Sign Out
 //   - mobile top bar: bell (or Sign in)
-//   - mobile bottom tab bar: Browse, Auctions, Sell, Dashboard, Me
+//   - mobile bottom tab bar: Browse, Charities, Sell, Dashboard, Me
 'use client'
 
-import { Suspense, useEffect, useState, useSyncExternalStore } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Gavel, LayoutGrid, LogIn, PlusCircle, Search, HeartHandshake } from 'lucide-react'
+import { Info, LayoutGrid, LogIn, PlusCircle, Search, HeartHandshake } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { signOut } from '@/app/auth/actions'
 import { NotificationBell } from '@/components/NotificationBell'
@@ -91,7 +91,7 @@ export function AuthNav({ active = null }: { active?: NavSection }) {
         )}
       </div>
       {/* The current path is only known at request time; the fallback is the same bar with nothing highlighted. */}
-      <Suspense fallback={<TabBar state={state} active={active} pathname="" search="" />}>
+      <Suspense fallback={<TabBar state={state} active={active} pathname="" />}>
         <MobileTabBar state={state} active={active} />
       </Suspense>
     </>
@@ -154,21 +154,13 @@ function DesktopAccount({ state, isAdmin }: { state: AuthState; isAdmin: boolean
 function MobileTabBar({ state, active }: { state: AuthState; active: NavSection }) {
   const pathname = usePathname()
   useEffect(() => rememberPath(pathname), [pathname])
-  // Re-read on every render (route changes re-render this), and on back/forward.
-  const search = useSyncExternalStore(
-    (onChange) => {
-      window.addEventListener('popstate', onChange)
-      return () => window.removeEventListener('popstate', onChange)
-    },
-    () => window.location.search,
-    () => '',
-  )
-  return <TabBar state={state} active={active} pathname={pathname} search={search} />
+  return <TabBar state={state} active={active} pathname={pathname} />
 }
 
-function TabBar({ state, active, pathname, search }: { state: AuthState; active: NavSection; pathname: string; search: string }) {
+function TabBar({ state, active, pathname }: { state: AuthState; active: NavSection; pathname: string }) {
   const signedIn = typeof state === 'object'
-  const onAuctions = pathname === '/listings' && new URLSearchParams(search).get('type') === 'auction'
+  const onBrowse = pathname.startsWith('/listings')
+  const onCharities = pathname.startsWith('/charities') || active === 'charities'
   const sell = useSellSheet({ onDashboard: pathname === '/dashboard' })
 
   // Blue bar with white labels; the current page is shown in a soft grey,
@@ -188,17 +180,17 @@ function TabBar({ state, active, pathname, search }: { state: AuthState; active:
     >
       {sell.sheet}
       <div className="flex max-w-lg mx-auto">
-        <Link href="/listings" className={tab(pathname.startsWith('/listings') && !onAuctions)}>
-          <span className={icon(pathname.startsWith('/listings') && !onAuctions)}>
+        <Link href="/listings" className={tab(onBrowse)}>
+          <span className={icon(onBrowse)}>
             <Search className="w-5 h-5" />
           </span>
           Browse
         </Link>
-        <Link href="/listings?type=auction" className={tab(onAuctions)}>
-          <span className={icon(onAuctions)}>
-            <Gavel className="w-5 h-5" />
+        <Link href="/charities" className={tab(onCharities)}>
+          <span className={icon(onCharities)}>
+            <HeartHandshake className="w-5 h-5" />
           </span>
-          Auctions
+          Charities
         </Link>
         {state === 'loading' ? (
           // Don't flash "Sign in" while the session is being checked.
@@ -232,11 +224,11 @@ function TabBar({ state, active, pathname, search }: { state: AuthState; active:
           </>
         ) : (
           <>
-            <Link href="/charities" className={tab(active === 'charities')}>
-              <span className={icon(active === 'charities')}>
-                <HeartHandshake className="w-5 h-5" />
+            <Link href="/#how-it-works" className={tab(active === 'how')}>
+              <span className={icon(active === 'how')}>
+                <Info className="w-5 h-5" />
               </span>
-              Charities
+              How it works
             </Link>
             <Link href="/login" className={tab(pathname === '/login')}>
               <span className={icon(pathname === '/login')}>

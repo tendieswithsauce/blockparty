@@ -15,6 +15,8 @@ export function AreaSelect({
   cityOptions = false,
   placeholder,
   onLoaded,
+  name,
+  required,
 }: {
   id?: string
   value: string
@@ -27,6 +29,9 @@ export function AreaSelect({
   /** Shown as a disabled first option while nothing is chosen. */
   placeholder?: string
   onLoaded?: (areas: Area[]) => void
+  /** For plain form posts. */
+  name?: string
+  required?: boolean
 }) {
   const [areas, setAreas] = useState<Area[] | null>(null)
 
@@ -51,7 +56,15 @@ export function AreaSelect({
   }, [])
 
   return (
-    <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={className} disabled={!areas}>
+    <select
+      id={id}
+      name={name}
+      required={required}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={className}
+      disabled={!areas}
+    >
       {!areas && <option value={value}>Loading areas…</option>}
       {areas && placeholder && (
         <option value="" disabled>

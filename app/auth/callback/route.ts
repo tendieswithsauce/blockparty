@@ -5,6 +5,7 @@ import { after, NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { safeNextPath } from '@/lib/auth/redirect'
 import { sendWelcomeEmailOnce } from '@/lib/email/welcome'
+import { afterSignIn } from '@/lib/auth/onboarding'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl
@@ -24,8 +25,11 @@ export async function GET(request: NextRequest) {
     if (!error) {
       // First confirmed sign-in (email link or Google): welcome email, sent once.
       const userId = data.user?.id
-      if (userId) after(() => sendWelcomeEmailOnce(userId, origin))
-      return NextResponse.redirect(`${origin}${next}`)
+      if (!userId) return NextResponse.redirect(`${origin}${next}`)
+      // Password-reset links land here too: send those straight on.
+      const target = next.startsWith('/reset-password') ? next : await afterSignIn(userId, next, { firstTime: true })
+      after(() => sendWelcomeEmailOnce(userId, origin))
+      return NextResponse.redirect(`${origin}${target}`)
     }
   }
 

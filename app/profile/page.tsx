@@ -16,10 +16,24 @@ import { PROFILE_CHANGED_EVENT } from '@/components/AuthNav'
 import { PaymentMethodSection } from '@/components/payments/PaymentMethodSection'
 import { BlockedMembers } from '@/components/BlockedMembers'
 import { signOut } from '@/app/auth/actions'
+import { WHY, optionalDetailsProblem, phoneProblem } from '@/lib/profile-rules'
 
 const input =
   'mt-1 w-full border border-slate-300 px-3 py-2.5 rounded-xl text-base focus:ring-2 focus:ring-[#0E4D5C] focus:outline-none disabled:bg-slate-50 disabled:text-slate-500'
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+
+/** Details that show as plain text with an Edit button once they're filled in. */
+type DetailKey = 'username' | 'fullName' | 'phone' | 'areaId' | 'homeAddress' | 'ecEmail'
+type Saved = {
+  fullName: string
+  phone: string
+  areaId: string
+  areaName: string
+  homeAddress: string
+  ecName: string
+  ecEmail: string
+  emailAlerts: boolean
+}
+const EMPTY_SAVED: Saved = { fullName: '', phone: '', areaId: '', areaName: '', homeAddress: '', ecName: '', ecEmail: '', emailAlerts: true }
 
 /** Square-crops and shrinks a photo to a 400px JPEG in the browser. */
 async function toAvatarJpeg(file: File): Promise<Blob> {
@@ -53,6 +67,9 @@ export default function ProfilePage() {
   const [ecName, setEcName] = useState('')
   const [ecEmail, setEcEmail] = useState('')
   const [emailAlerts, setEmailAlerts] = useState(true)
+  const [saved, setSaved] = useState<Saved>(EMPTY_SAVED)
+  const [editing, setEditing] = useState<Set<DetailKey>>(new Set())
+  const [areaNames, setAreaNames] = useState<Map<string, string>>(new Map())
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -73,7 +90,7 @@ export default function ProfilePage() {
         supabase
           .from('profiles')
           .select(
-            'username, username_changed_at, full_name, phone, area_id, email_alerts, avatar_path, home_address, emergency_contact_name, emergency_contact_email',
+            'username, username_changed_at, full_name, phone, area_id, email_alerts, avatar_path, home_address, emergency_contact_name, emergency_contact_email, area:areas(name, city)',
           )
           .eq('id', user.id)
           .single(),
@@ -94,6 +111,16 @@ export default function ProfilePage() {
         setHomeAddress(data.home_address || '')
         setEcName(data.emergency_contact_name || '')
         setEcEmail(data.emergency_contact_email || '')
+        setSaved({
+          fullName: data.full_name || '',
+          phone: data.phone || '',
+          areaId: data.area_id || '',
+          areaName: data.area ? `${data.area.name}, ${data.area.city}` : '',
+          homeAddress: data.home_address || '',
+          ecName: data.emergency_contact_name || '',
+          ecEmail: data.emergency_contact_email || '',
+          emailAlerts: data.email_alerts,
+        })
       }
       setIsAdmin(!!admin)
       setLoading(false)
@@ -150,11 +177,9 @@ export default function ProfilePage() {
     const address = homeAddress.trim()
     const contactName = ecName.trim()
     const contactEmail = ecEmail.trim().toLowerCase()
-    if (address && address.length < 5) return setStatus({ ok: false, text: 'Enter your full street address, or leave it blank.' })
-    if (contactEmail && !EMAIL_RE.test(contactEmail)) {
-      return setStatus({ ok: false, text: "Check your emergency contact's email address." })
-    }
-    if (contactName && !contactEmail) return setStatus({ ok: false, text: "Add your emergency contact's email address." })
+    if (!areaId) return setStatus({ ok: false, text: 'Choose your area.' })
+    const problem = phoneProblem(phone.trim()) ?? optionalDetailsProblem({ homeAddress: address, ecName: contactName, ecEmail: contactEmail })
+    if (problem) return setStatus({ ok: false, text: problem })
     setSaving(true)
     const supabase = createClient()
     if (!userId) {
@@ -190,9 +215,62 @@ export default function ProfilePage() {
       })
       .eq('id', userId)
 
-    setStatus(error ? { ok: false, text: 'Could not save your profile. Please try again.' } : { ok: true, text: 'Profile saved.' })
     setSaving(false)
+    if (error) return setStatus({ ok: false, text: 'Could not save your profile. Please try again.' })
+    setStatus({ ok: true, text: 'Profile saved.' })
+    const keptName = contactEmail ? contactName : ''
+    setSaved({
+      fullName: fullName.trim(),
+      phone: phone.trim(),
+      areaId,
+      areaName: areaNames.get(areaId) ?? saved.areaName,
+      homeAddress: address,
+      ecName: keptName,
+      ecEmail: contactEmail,
+      emailAlerts,
+    })
+    setFullName(fullName.trim())
+    setPhone(phone.trim())
+    setHomeAddress(address)
+    setEcName(keptName)
+    setEcEmail(contactEmail)
+    setEditing(new Set())
   }
+
+  const savedValue: Record<DetailKey, string> = {
+    username: savedUsername,
+    fullName: saved.fullName,
+    phone: saved.phone,
+    areaId: saved.areaId,
+    homeAddress: saved.homeAddress,
+    ecEmail: saved.ecEmail,
+  }
+  const isStatic = (key: DetailKey) => Boolean(savedValue[key]) && !editing.has(key)
+  function startEditing(key: DetailKey) {
+    setStatus(null)
+    setEditing((prev) => new Set(prev).add(key))
+  }
+  function cancelEditing() {
+    setUsername(savedUsername)
+    setFullName(saved.fullName)
+    setPhone(saved.phone)
+    setAreaId(saved.areaId)
+    setHomeAddress(saved.homeAddress)
+    setEcName(saved.ecName)
+    setEcEmail(saved.ecEmail)
+    setEmailAlerts(saved.emailAlerts)
+    setEditing(new Set())
+    setStatus(null)
+  }
+  const dirty =
+    username !== savedUsername ||
+    fullName.trim() !== saved.fullName ||
+    phone.trim() !== saved.phone ||
+    areaId !== saved.areaId ||
+    homeAddress.trim() !== saved.homeAddress ||
+    ecName.trim() !== saved.ecName ||
+    ecEmail.trim().toLowerCase() !== saved.ecEmail ||
+    emailAlerts !== saved.emailAlerts
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#1E293B]">
@@ -250,96 +328,139 @@ export default function ProfilePage() {
             <form onSubmit={handleSaveProfile} className="bg-white border rounded-2xl p-5 md:p-8 shadow-sm space-y-5">
               <h1 className="text-xl font-bold">Your details</h1>
 
-              <div>
-                <DisplayNameField
-                  value={username}
-                  onChange={setUsername}
-                  onStatus={setNameStatus}
-                  original={savedUsername}
-                  disabled={!!nameLockedUntil}
-                  inputClassName={`${input} pr-9`}
+              {isStatic('username') ? (
+                <DetailRow
+                  label="Display name"
+                  value={savedUsername}
+                  note={nameLockedUntil ? `You can change it again on ${nameLockedUntil}.` : 'Shown to other members.'}
+                  onEdit={nameLockedUntil ? undefined : () => startEditing('username')}
                 />
-                <p className="mt-1 text-xs text-slate-500">
-                  {nameLockedUntil
-                    ? `You can change your display name again on ${nameLockedUntil}.`
-                    : 'Shown to other members. You can change it once every 30 days.'}
-                </p>
-              </div>
-
-              <label className="block">
-                <span className="text-sm font-medium text-slate-700">
-                  Full name <span className="font-normal text-slate-400">(private)</span>
-                </span>
-                <input type="text" autoComplete="name" value={fullName} onChange={(e) => setFullName(e.target.value)} className={input} />
-              </label>
-
-              <label className="block">
-                <span className="text-sm font-medium text-slate-700">
-                  Phone number <span className="font-normal text-slate-400">(private)</span>
-                </span>
-                <input type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={input} />
-              </label>
-
-              <div>
-                <label htmlFor="profile-area" className="block text-sm font-medium text-slate-700">
-                  Your area
-                </label>
-                <AreaSelect
-                  id="profile-area"
-                  value={areaId}
-                  onChange={setAreaId}
-                  placeholder="Choose the part of the city you're in"
-                  className={input}
-                />
-                <p className="mt-1 text-xs text-slate-500">Used to suggest meetup spots that are fair to you and the other person.</p>
-              </div>
-
-              <label className="block">
-                <span className="text-sm font-medium text-slate-700">
-                  Home address <span className="font-normal text-slate-400">(optional, private)</span>
-                </span>
-                <textarea
-                  rows={2}
-                  maxLength={200}
-                  autoComplete="street-address"
-                  value={homeAddress}
-                  onChange={(e) => setHomeAddress(e.target.value)}
-                  placeholder="123 Main St NW, Calgary AB T2N 1A1"
-                  className={input}
-                />
-                <span className="mt-1 block text-xs text-slate-500">
-                  Needed only if you offer pickup at your home, or want items delivered to you. It&apos;s shown only to the
-                  other person in that order, once their payment is on hold, and hidden again when the order closes.
-                </span>
-              </label>
-
-              <fieldset className="space-y-3 rounded-xl bg-[#0E4D5C]/5 p-4">
-                <legend className="sr-only">Emergency contact</legend>
-                <p className="flex items-center gap-2 text-sm font-semibold text-[#0E4D5C]">
-                  <ShieldAlert className="w-4 h-4" /> Emergency contact <span className="font-normal text-slate-500">(optional)</span>
-                </p>
-                <p className="text-xs text-slate-600">
-                  When you and the other person agree on a meetup time, we email this person where you&apos;re going and when, and
-                  again when it&apos;s done or cancelled. Let them know to expect it.
-                </p>
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-700">Their name</span>
-                    <input type="text" maxLength={100} value={ecName} onChange={(e) => setEcName(e.target.value)} className={input} />
-                  </label>
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-700">Their email</span>
-                    <input
-                      type="email"
-                      inputMode="email"
-                      maxLength={254}
-                      value={ecEmail}
-                      onChange={(e) => setEcEmail(e.target.value)}
-                      className={input}
-                    />
-                  </label>
+              ) : (
+                <div>
+                  <DisplayNameField
+                    value={username}
+                    onChange={setUsername}
+                    onStatus={setNameStatus}
+                    original={savedUsername}
+                    disabled={!!nameLockedUntil}
+                    inputClassName={`${input} pr-9`}
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    {nameLockedUntil
+                      ? `You can change your display name again on ${nameLockedUntil}.`
+                      : 'Shown to other members. You can change it once every 30 days.'}
+                  </p>
                 </div>
-              </fieldset>
+              )}
+
+              {isStatic('fullName') ? (
+                <DetailRow label="Full name" value={saved.fullName} note="Private." onEdit={() => startEditing('fullName')} />
+              ) : (
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">
+                    Full name <span className="font-normal text-slate-400">(private)</span>
+                  </span>
+                  <input type="text" autoComplete="name" value={fullName} onChange={(e) => setFullName(e.target.value)} className={input} />
+                </label>
+              )}
+
+              {isStatic('phone') ? (
+                <DetailRow label="Phone number" value={saved.phone} note="Private." onEdit={() => startEditing('phone')} />
+              ) : (
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">Phone number</span>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    required
+                    maxLength={30}
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className={input}
+                  />
+                  <span className="mt-1 block text-xs text-slate-500">{WHY.phone}</span>
+                </label>
+              )}
+
+              {isStatic('areaId') ? (
+                <DetailRow label="Your area" value={saved.areaName || 'Set'} onEdit={() => startEditing('areaId')} />
+              ) : (
+                <div>
+                  <label htmlFor="profile-area" className="block text-sm font-medium text-slate-700">
+                    Your area
+                  </label>
+                  <AreaSelect
+                    id="profile-area"
+                    required
+                    value={areaId}
+                    onChange={setAreaId}
+                    onLoaded={(list) => setAreaNames(new Map(list.map((a) => [a.id, `${a.name}, ${a.city}`])))}
+                    placeholder="Choose the part of the city you're in"
+                    className={input}
+                  />
+                  <p className="mt-1 text-xs text-slate-500">{WHY.area}</p>
+                </div>
+              )}
+
+              {isStatic('homeAddress') ? (
+                <DetailRow
+                  label="Home address"
+                  value={saved.homeAddress}
+                  note="Private. Shown only to the other person in a pickup or delivery order."
+                  onEdit={() => startEditing('homeAddress')}
+                />
+              ) : (
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">
+                    Home address <span className="font-normal text-slate-400">(optional, private)</span>
+                  </span>
+                  <textarea
+                    rows={2}
+                    maxLength={200}
+                    autoComplete="street-address"
+                    value={homeAddress}
+                    onChange={(e) => setHomeAddress(e.target.value)}
+                    placeholder="123 Main St NW, Calgary AB T2N 1A1"
+                    className={input}
+                  />
+                  <span className="mt-1 block text-xs text-slate-500">{WHY.address}</span>
+                </label>
+              )}
+
+              {isStatic('ecEmail') ? (
+                <DetailRow
+                  label="Emergency contact"
+                  value={saved.ecName ? `${saved.ecName} · ${saved.ecEmail}` : saved.ecEmail}
+                  note="Emailed when you agree on a meetup, and when it's done or cancelled."
+                  onEdit={() => startEditing('ecEmail')}
+                />
+              ) : (
+                <fieldset className="space-y-3 rounded-xl bg-[#0E4D5C]/5 p-4">
+                  <legend className="sr-only">Emergency contact</legend>
+                  <p className="flex items-center gap-2 text-sm font-semibold text-[#0E4D5C]">
+                    <ShieldAlert className="w-4 h-4" /> Emergency contact <span className="font-normal text-slate-500">(optional)</span>
+                  </p>
+                  <p className="text-xs text-slate-600">{WHY.emergency}</p>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="text-sm font-medium text-slate-700">Their name</span>
+                      <input type="text" maxLength={100} value={ecName} onChange={(e) => setEcName(e.target.value)} className={input} />
+                    </label>
+                    <label className="block">
+                      <span className="text-sm font-medium text-slate-700">Their email</span>
+                      <input
+                        type="email"
+                        inputMode="email"
+                        maxLength={254}
+                        value={ecEmail}
+                        onChange={(e) => setEcEmail(e.target.value)}
+                        className={input}
+                      />
+                    </label>
+                  </div>
+                </fieldset>
+              )}
 
               <fieldset>
                 <legend className="block text-sm font-medium text-slate-700">Email</legend>
@@ -365,13 +486,26 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={saving || nameStatus === 'checking' || nameStatus === 'bad'}
-                className="w-full bg-[#0E4D5C] disabled:opacity-60 text-white py-3 rounded-full font-bold hover:bg-[#0b3f4b] transition"
-              >
-                {saving ? 'Saving…' : 'Save profile'}
-              </button>
+              {(dirty || editing.size > 0) && (
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    disabled={saving || nameStatus === 'checking' || nameStatus === 'bad'}
+                    className="flex-1 bg-[#0E4D5C] disabled:opacity-60 text-white py-3 rounded-full font-bold hover:bg-[#0b3f4b] transition"
+                  >
+                    {saving ? 'Saving…' : 'Save changes'}
+                  </button>
+                  {editing.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={cancelEditing}
+                      className="px-5 py-3 rounded-full border-2 border-slate-300 font-semibold text-slate-600 hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              )}
             </form>
 
             <PaymentMethodSection />
@@ -410,6 +544,28 @@ export default function ProfilePage() {
           </Link>
         </p>
       </main>
+    </div>
+  )
+}
+
+/** A saved detail shown as text, with an Edit button. */
+function DetailRow({ label, value, note, onEdit }: { label: string; value: string; note?: string; onEdit?: () => void }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-slate-500">{label}</p>
+        <p className="font-semibold break-words whitespace-pre-line">{value}</p>
+        {note && <p className="text-xs text-slate-500 mt-0.5">{note}</p>}
+      </div>
+      {onEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="shrink-0 px-3 py-1.5 rounded-full border border-slate-300 text-sm font-semibold text-[#0E4D5C] hover:bg-slate-50"
+        >
+          Edit
+        </button>
+      )}
     </div>
   )
 }

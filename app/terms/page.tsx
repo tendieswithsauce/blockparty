@@ -158,8 +158,8 @@ export default function TermsPage() {
               <li>A bid placed in the last 2 minutes extends the auction by 2 minutes, so everyone has a fair chance to respond.</li>
               <li>If an auction has a reserve price and the reserve isn&apos;t met, there&apos;s no sale.</li>
               <li>
-                If the winning bidder&apos;s card can&apos;t be held, the item may be offered to the next-highest bidder at
-                their bid.
+                If the winning bidder&apos;s card can&apos;t be held, or they back out of the order, the item may go to the
+                next-highest bidder who met the reserve, at their bid. Your bid stays binding until the auction is settled.
               </li>
               <li>In charity silent auctions, bids are hidden; the highest bid wins.</li>
               <li>

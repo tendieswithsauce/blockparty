@@ -56,6 +56,7 @@ type Order = {
     title: string
     image_paths: string[]
     listing_type: 'fixed' | 'auction'
+    status: string
     area: { name: string; city: string; timezone: string } | null
   } | null
   spot: Spot | null
@@ -67,7 +68,7 @@ type Suggestion = Spot & { buyer_km: number; seller_km: number }
 type HomePlace = { method: HandoffMethod; address: string | null; hiddenUntil: string | null }
 
 const ORDER_COLUMNS =
-  'id, buyer_id, seller_id, amount_cents, platform_fee_cents, status, authorized_at, proposed_times, proposed_by, proposal_note, meetup_at, meetup_deadline, picked_up_at, cancel_reason, canceled_by, handoff_method, delivery_fee_cents, listing:listings(id, title, image_paths, listing_type, area:areas(name, city, timezone)), spot:meetup_spots(id, name, address, kind, lat, lng, timezone, notes)'
+  'id, buyer_id, seller_id, amount_cents, platform_fee_cents, status, authorized_at, proposed_times, proposed_by, proposal_note, meetup_at, meetup_deadline, picked_up_at, cancel_reason, canceled_by, handoff_method, delivery_fee_cents, listing:listings(id, title, image_paths, listing_type, status, area:areas(name, city, timezone)), spot:meetup_spots(id, name, address, kind, lat, lng, timezone, notes)'
 
 const card = 'bg-white border rounded-2xl p-6 shadow-sm space-y-4'
 const primaryBtn = 'px-5 py-2.5 rounded-full bg-[#F26B5B] text-white font-bold hover:bg-[#e05a4a] disabled:opacity-60'
@@ -214,6 +215,7 @@ export function OrderView({ id }: { id: number }) {
             {cancelReasonLabel(order.cancel_reason)}.{' '}
             {role === 'buyer' ? 'The hold on your card was released; you were not charged.' : 'The buyer was not charged.'}
           </p>
+          {role === 'seller' && order.listing && <AfterCancel listing={order.listing} onDone={load} />}
         </div>
       ) : order.status !== 'authorized' ? (
         <div className={card}>
@@ -919,5 +921,48 @@ function CancelOrder({
         </ConfirmDialog>
       )}
     </>
+  )
+}
+
+/** Seller, after a cancelled order: relist a Set Price item, or see where an auction went. */
+function AfterCancel({ listing, onDone }: { listing: NonNullable<Order['listing']>; onDone: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function relist() {
+    setBusy(true)
+    setError('')
+    const { error: rpcError } = await createClient().rpc('relist_listing', { p_listing_id: listing.id })
+    setBusy(false)
+    if (rpcError) return setError(rpcError.code === 'P0001' ? `${rpcError.message}.` : 'Something went wrong. Please try again.')
+    onDone()
+  }
+
+  if (listing.listing_type === 'auction') {
+    const text =
+      listing.status === 'inactive'
+        ? 'The auction has ended without a sale.'
+        : "We offered it to the next-highest bidder who met your price. You'll get a notification when they win it."
+    return <p className="text-sm text-slate-600">{text}</p>
+  }
+  if (listing.status === 'active') {
+    return (
+      <p className="text-sm text-green-700 font-semibold">
+        Your listing is back up.{' '}
+        <Link href={`/listings/${listing.id}`} className="underline">
+          View it
+        </Link>
+      </p>
+    )
+  }
+  if (listing.status !== 'inactive') return null
+  return (
+    <div className="rounded-xl bg-[#0E4D5C]/5 p-4 space-y-3">
+      <p className="text-sm text-slate-700">Your listing is paused. Put it back up for other buyers?</p>
+      <button type="button" onClick={relist} disabled={busy} className={primaryBtn}>
+        {busy ? 'Relisting…' : 'Relist it'}
+      </button>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+    </div>
   )
 }

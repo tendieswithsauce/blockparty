@@ -13,6 +13,7 @@ import {
   MapPin,
   Package,
   PlusCircle,
+  RotateCcw,
   ShoppingBag,
   Tag,
 } from 'lucide-react'
@@ -122,6 +123,18 @@ const STATUS_LABELS: Record<string, string> = {
   refunded: 'Refunded',
 }
 
+type ListingTab = 'active' | 'sold' | 'inactive'
+const LISTING_TABS: { id: ListingTab; label: string }[] = [
+  { id: 'active', label: 'Active' },
+  { id: 'sold', label: 'Sold' },
+  { id: 'inactive', label: 'Inactive' },
+]
+function listingTab(l: { status: string }): ListingTab {
+  if (l.status === 'active') return 'active'
+  if (['sold', 'pending_pickup', 'complete'].includes(l.status)) return 'sold'
+  return 'inactive'
+}
+
 const BID_STATE_LABELS: Record<MyBid['state'], string> = {
   winning: 'Winning',
   outbid: 'Outbid',
@@ -150,6 +163,8 @@ export default function DashboardPage() {
   const [showModal, setShowModal] = useState(false)
   const [showPayoutPrompt, setShowPayoutPrompt] = useState(false)
   const [converting, setConverting] = useState<MyListing | null>(null)
+  const [listingView, setListingView] = useState<ListingTab>('active')
+  const [relisting, setRelisting] = useState<number | null>(null)
   const payoutReturn = useRef<string | null | undefined>(undefined)
   const [notice, setNotice] = useState<{ kind: 'success' | 'info' | 'error'; text: string } | null>(null)
 
@@ -311,6 +326,20 @@ export default function DashboardPage() {
   }, [load])
 
   const activeListings = data?.listings.filter((l) => l.status === 'active') ?? []
+  const shownListings = data?.listings.filter((l) => listingTab(l) === listingView) ?? []
+
+  async function relist(l: MyListing) {
+    setRelisting(l.id)
+    const { error } = await createClient().rpc('relist_listing', { p_listing_id: l.id })
+    setRelisting(null)
+    if (error) {
+      setNotice({ kind: 'error', text: error.code === 'P0001' ? `${error.message}.` : 'Could not relist it. Please try again.' })
+      return
+    }
+    setNotice({ kind: 'success', text: `${l.title} is back up.` })
+    setListingView('active')
+    load()
+  }
   const soldCount = data?.listings.filter((l) => ['sold', 'pending_pickup', 'complete'].includes(l.status)).length ?? 0
 
   const steps = [
@@ -466,8 +495,30 @@ export default function DashboardPage() {
         )}
 
         {/* Listings */}
-        <section className="bg-white border rounded-2xl p-6 shadow-sm">
-          <h2 className="text-lg font-bold mb-4">Your listings</h2>
+        <section className="bg-white border rounded-2xl p-4 sm:p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <h2 className="text-lg font-bold">Your listings</h2>
+            {data && data.listings.length > 0 && (
+              <div role="tablist" aria-label="Listing status" className="inline-flex rounded-full bg-slate-100 p-1 text-sm font-semibold">
+                {LISTING_TABS.map((t) => {
+                  const count = data.listings.filter((l) => listingTab(l) === t.id).length
+                  const on = listingView === t.id
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={on}
+                      onClick={() => setListingView(t.id)}
+                      className={`px-3 py-1.5 rounded-full ${on ? 'bg-white text-[#0E4D5C] shadow-sm' : 'text-slate-500'}`}
+                    >
+                      {t.label} <span className="font-normal">{count}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
           {!data ? (
             <p className="text-sm text-slate-500">Loading…</p>
           ) : data.listings.length === 0 ? (
@@ -481,61 +532,85 @@ export default function DashboardPage() {
                 </button>
               }
             />
+          ) : shownListings.length === 0 ? (
+            <p className="text-sm text-slate-500 py-6 text-center">
+              {listingView === 'active' ? 'Nothing live right now.' : listingView === 'sold' ? 'Nothing sold yet.' : 'No inactive listings.'}
+            </p>
           ) : (
-            <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {data.listings.map((l) => (
-                <li key={l.id} className="border rounded-xl overflow-hidden">
-                  <div className="aspect-[4/3] bg-slate-100">
-                    {l.image_paths?.[0] && (
-                      // eslint-disable-next-line @next/next/no-img-element -- Supabase public URL
-                      <img
-                        src={createClient().storage.from('listing-photos').getPublicUrl(l.image_paths[0]).data.publicUrl}
-                        alt={l.title}
-                        className="w-full h-full object-cover"
-                      />
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <Link href={`/listings/${l.id}`} className="font-semibold line-clamp-1 hover:text-[#F26B5B]">
-                        {l.title}
-                      </Link>
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 shrink-0">
-                        {l.review_status === 'pending' && l.status === 'active'
+            <ul className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              {shownListings.map((l) => {
+                const live = l.status === 'active'
+                return (
+                  <li key={l.id} className="border rounded-xl overflow-hidden flex flex-col">
+                    <div className="relative aspect-[4/3] bg-slate-100">
+                      {l.image_paths?.[0] && (
+                        // eslint-disable-next-line @next/next/no-img-element -- Supabase public URL
+                        <img
+                          src={createClient().storage.from('listing-photos').getPublicUrl(l.image_paths[0]).data.publicUrl}
+                          alt={l.title}
+                          className={`w-full h-full object-cover ${live ? '' : 'grayscale'}`}
+                        />
+                      )}
+                      {/* Grey wash over anything that isn't live. */}
+                      {!live && <div className="absolute inset-0 bg-slate-500/40" aria-hidden />}
+                      <span
+                        className={`absolute top-2 left-2 text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                          live ? 'bg-white/90 text-[#0E4D5C]' : 'bg-slate-700/90 text-white'
+                        }`}
+                      >
+                        {l.review_status === 'pending' && live
                           ? 'In review'
                           : l.review_status === 'rejected'
                             ? 'Not approved'
                             : (STATUS_LABELS[l.status] ?? l.status)}
                       </span>
                     </div>
-                    <p className="text-[#0E4D5C] font-bold mt-1">{listingPrice(l)}</p>
-                    {l.review_status !== 'approved' && l.status === 'active' && (
-                      <p className={`text-xs mt-1 ${l.review_status === 'rejected' ? 'text-red-700' : 'text-amber-800'}`}>
-                        {l.review_status === 'rejected'
-                          ? (l.moderation_reason ?? "It doesn't meet our listing rules.")
-                          : l.moderation_reason
-                            ? `Being reviewed: ${l.moderation_reason}`
-                            : 'Being checked. It goes live in a minute or two.'}
-                      </p>
-                    )}
-                    <p className="text-xs text-slate-500 mt-1">
-                      {l.listing_type === 'auction'
-                        ? `${l.bid_count} ${l.bid_count === 1 ? 'bid' : 'bids'}${l.ends_at ? ` · ends ${new Date(l.ends_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}` : ''}${l.reserve ? ` · reserve ${formatCents(l.reserve.reserve_cents)}${l.reserve_met ? ' (met)' : ''}` : ' · no reserve'}`
-                        : 'Set Price'}
-                      {l.watch_count > 0 && ` · ${l.watch_count} watching`}
-                    </p>
-                    {l.listing_type === 'fixed' && l.status === 'active' && !l.converted_at && (
-                      <button
-                        type="button"
-                        onClick={() => setConverting(l)}
-                        className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0E4D5C] hover:text-[#F26B5B]"
+                    <div className={`p-3 sm:p-4 flex-1 ${live ? '' : 'bg-slate-50'}`}>
+                      <Link
+                        href={`/listings/${l.id}`}
+                        className={`block text-sm sm:text-base font-semibold line-clamp-2 sm:line-clamp-1 hover:text-[#F26B5B] ${live ? '' : 'text-slate-500'}`}
                       >
-                        <Gavel className="w-4 h-4" /> Switch to auction
-                      </button>
-                    )}
-                  </div>
-                </li>
-              ))}
+                        {l.title}
+                      </Link>
+                      <p className={`font-bold mt-1 ${live ? 'text-[#0E4D5C]' : 'text-slate-500'}`}>{listingPrice(l)}</p>
+                      {l.review_status !== 'approved' && (live || l.review_status === 'rejected') && (
+                        <p className={`text-xs mt-1 ${l.review_status === 'rejected' ? 'text-red-700' : 'text-amber-800'}`}>
+                          {l.review_status === 'rejected'
+                            ? (l.moderation_reason ?? "It doesn't meet our listing rules.")
+                            : l.moderation_reason
+                              ? `Being reviewed: ${l.moderation_reason}`
+                              : 'Being checked. It goes live in a minute or two.'}
+                        </p>
+                      )}
+                      <p className="text-xs text-slate-500 mt-1">
+                        {l.listing_type === 'auction'
+                          ? `${l.bid_count} ${l.bid_count === 1 ? 'bid' : 'bids'}${l.ends_at ? ` · ${live ? 'ends' : 'ended'} ${new Date(l.ends_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}` : ''}${l.reserve ? ` · reserve ${formatCents(l.reserve.reserve_cents)}${l.reserve_met ? ' (met)' : ''}` : ' · no reserve'}`
+                          : 'Set Price'}
+                        {l.watch_count > 0 && ` · ${l.watch_count} watching`}
+                      </p>
+                      {l.listing_type === 'fixed' && live && !l.converted_at && (
+                        <button
+                          type="button"
+                          onClick={() => setConverting(l)}
+                          className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0E4D5C] hover:text-[#F26B5B]"
+                        >
+                          <Gavel className="w-4 h-4" /> Switch to auction
+                        </button>
+                      )}
+                      {l.listing_type === 'fixed' && l.status === 'inactive' && l.review_status !== 'rejected' && (
+                        <button
+                          type="button"
+                          onClick={() => relist(l)}
+                          disabled={relisting === l.id}
+                          className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0E4D5C] hover:text-[#F26B5B] disabled:opacity-60"
+                        >
+                          <RotateCcw className="w-4 h-4" /> {relisting === l.id ? 'Relisting…' : 'Relist'}
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </section>

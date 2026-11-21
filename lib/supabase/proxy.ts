@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from './database.types'
 
 /** Pages that require a signed-in user. */
-const PROTECTED_PREFIXES = ['/dashboard', '/profile', '/reset-password', '/payouts', '/orders']
+const PROTECTED_PREFIXES = ['/dashboard', '/profile', '/reset-password', '/payouts', '/orders', '/welcome']
 
 /** Pages a signed-in user has no reason to see. */
 const SIGNED_OUT_ONLY = ['/login', '/signup', '/forgot-password']

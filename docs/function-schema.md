@@ -35,13 +35,15 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 |---|---|---|---|---|---|
 | `begin_purchase` | listing_id, buyer_id, fee_bps, min_fee_cents, handoff | transactions | service | definer | Starts a Buy Now order. |
 | `place_bid` | listing_id, amount_cents, handoff | bids | auth, service | definer | Places a bid; extends the auction 2 min if it lands in the last 2. |
-| `close_auction` | listing_id, fee_bps, min_fee_cents | transactions | service | definer | Closes an ended auction and creates the order (skips blocked bidders). |
+| `close_auction` | listing_id, fee_bps, min_fee_cents | transactions | service | definer | Closes an ended auction and creates the order (skips blocked bidders and bidders whose order was cancelled, so it also hands the item to the next bidder). |
 | `silent_bid_status` | listing_id | table | anon, auth, service | definer | The caller's own silent bid and whether it leads. |
 | `my_bidder_no` | listing_id | integer | auth, service | definer | The caller's bidder number on an auction (null if they haven't bid); bidder ids aren't readable through the API. |
 | `my_bids` | limit | setof bids | auth, service | definer | The caller's bids, newest first (dashboard); can embed the listing. |
 | `cancel_authorized_purchase` | transaction_id, buyer_id, window_seconds | text | service | definer | Buyer's undo window for Buy Now. |
 | `cancel_pending_purchase` | transaction_id | void | service | definer | Cancels a purchase that never completed payment. |
-| `cancel_order` | transaction_id, user_id, reason | text | service | definer | Cancels an order with a reason. |
+| `cancel_order` | transaction_id, user_id, reason | text | service | definer | Cancels an order with a reason. Set Price listings pause (inactive); an auction the buyer backed out of goes back to active so close_auction offers it to the next bidder. |
+| `passes_to_next_bidder` | transactions row | boolean | (internal) | invoker | Did the buyer back out (buyer cancelled, or seller reported a buyer no-show)? |
+| `relist_listing` | listing_id | void | auth, service | definer | Seller puts a paused Set Price listing back up. |
 | `release_stale_purchases` | | table | service | definer | Finds stale pending purchases to release. |
 | `expired_orders` | | setof bigint | service | definer | Orders past their handoff deadline. |
 | `complete_order` | transaction_id, transfer_id | void | service | definer | Marks an order complete after payout. |

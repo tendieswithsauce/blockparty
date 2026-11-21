@@ -4,11 +4,13 @@
 // move money, so they run on the server.
 'use server'
 
+import { after } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getStripe, stripeConfigured } from '@/lib/stripe/server'
 import { CANCEL_REASONS } from '@/lib/orders'
 import { payoutSeller } from '@/lib/payments/payouts'
+import { closeAuction } from '@/lib/payments/close-auction'
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string }
 
@@ -69,7 +71,12 @@ export async function completeHandoff(
   return { ok: true, payoutCents, payoutPending: transferId === null }
 }
 
-/** Either party cancels before the handoff. The buyer's hold is released. */
+/**
+ * Either party cancels before the handoff. The buyer's hold is released. If
+ * the buyer backed out of an auction, cancel_order puts the listing back to
+ * active and we offer it to the next-highest bidder straight away (the cron
+ * route picks it up within a minute if this doesn't finish).
+ */
 export async function cancelOrder(transactionId: number, reason: string): Promise<Result> {
   const user = await getCurrentUser()
   if (!user) return { ok: false, error: 'Please sign in.' }
@@ -89,6 +96,15 @@ export async function cancelOrder(transactionId: number, reason: string): Promis
     await getStripe()
       .paymentIntents.cancel(paymentIntentId)
       .catch((err) => console.error('cancelOrder: releasing hold failed', paymentIntentId, err))
+  }
+
+  const { data: txn } = await createAdminClient()
+    .from('transactions')
+    .select('listing_id, listing:listings(listing_type, status)')
+    .eq('id', transactionId)
+    .single()
+  if (txn?.listing?.listing_type === 'auction' && txn.listing.status === 'active' && stripeConfigured()) {
+    after(() => closeAuction(txn.listing_id).catch((err) => console.error('cancelOrder: next bidder failed', txn.listing_id, err)))
   }
   return { ok: true }
 }
