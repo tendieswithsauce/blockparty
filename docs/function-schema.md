@@ -75,6 +75,7 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `generate_username` | | text | anon, auth, service | definer | Random username. |
 | `set_username` | name | text | auth, service | definer | Change own username. |
 | `is_admin` | | boolean | anon, auth, service | definer | Is the caller an admin. |
+| `user_suspended` | user_id | boolean | anon, auth, service | definer | Is that member suspended (used by the listings visibility rule, close_auction and enforce_strike_limit, which now also blocks suspended members from listing, bidding and buying). |
 | `active_strike_count` | user_id | integer | service | definer | Active strikes against a member. |
 | `my_charity` | | table | anon, auth, service | definer | The caller's charity application and status. |
 | `apply_charity` | bn, name, description, website, contact_name, contact_role, contact_phone, contact_email | void | auth, service | definer | Apply as a charity. |
@@ -138,7 +139,10 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `admin_handoff_locations` | transaction_id | table | auth, service | Handoff GPS for one order. |
 | `admin_feedback` | | table | auth, service | Tester feedback from the dev site's Feedback button, open items first. |
 | `admin_set_feedback_status` | id, status, note | void | auth, service | Mark tester feedback done (or new again), with an optional note. |
-| `admin_listings` | query, filter, limit, offset | table | auth, service | Every listing, searchable by title, seller or id; filters all / live / reported / in_review / taken_down / inactive / sold. |
+| `admin_listings` | query, filter, limit, offset | table | auth, service | Every listing, searchable by title, seller or id; filters all / live / reported / in_review / taken_down / inactive / sold. Rows carry total_count (for page numbers) and seller_suspended. |
+| `admin_users` | query, filter, limit, offset | table | auth, service | Members, searchable by display name, real name or email; filters all / reported / strikes / suspended / sellers / unconfirmed / admins. Account details, activity counts and total_count. |
+| `admin_suspend_user` | user_id, reason | void | auth, service | Suspend a member (not yourself or another admin); they are emailed the reason. app/admin/actions.ts also bans their sign-in. |
+| `admin_unsuspend_user` | user_id | void | auth, service | Lift a suspension; they are emailed. The app lifts the sign-in ban. |
 | `admin_take_down_listing` | listing_id, reason | void | auth, service | Hide a listing (rejected, inactive); the seller is told why. Open orders carry on. |
 | `admin_restore_listing` | listing_id | void | auth, service | Undo a take-down; Set Price goes back up, an auction only if it hasn't ended. Seller is told. |
 | `admin_delete_listing` | listing_id, reason | text[] | auth, service | Delete a listing that never had an order; returns photo paths no other listing uses (app/admin/actions.ts removes them). |
@@ -152,6 +156,7 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | Function | Fires on | Does |
 |---|---|---|
 | `handle_new_user`, `handle_user_email_change` | auth users | Create or sync the profile. handle_new_user also copies the sign-up details (area, phone, address, emergency contact). |
+| `block_suspended_reactivation` | listings (before update of status) | A suspended seller's listing can't go from inactive back to active. |
 | `stash_signup_details` | auth users (before insert) | Strips the bp_ sign-up keys from the stored metadata and hands them to handle_new_user in the same transaction. |
 | `lock_auction_with_bids` | listings | Once an auction has bids, the seller can't edit it or take it down. |
 | `assign_bidder_no` | bids | Numbers bidders per auction (1, 2, …) in order of first bid; a repeat bidder keeps their number. |

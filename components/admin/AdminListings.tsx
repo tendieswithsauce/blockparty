@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatCents } from '@/lib/money'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { deleteListing } from '@/app/admin/actions'
+import { Pager } from '@/components/admin/Pager'
 import type { Database } from '@/lib/supabase/database.types'
 
 type Row = Database['public']['Functions']['admin_listings']['Returns'][number]
@@ -26,7 +27,7 @@ const FILTERS = [
 ] as const
 type Filter = (typeof FILTERS)[number]['id']
 
-const PAGE = 25
+const PAGE_SIZE = 20
 const card = 'bg-white border rounded-2xl p-6 shadow-sm'
 
 function statusLabel(r: Row) {
@@ -47,7 +48,8 @@ export function AdminListings() {
   const [submitted, setSubmitted] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [rows, setRows] = useState<Row[] | null>(null)
-  const [more, setMore] = useState(false)
+  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [pending, setPending] = useState<Pending>(null)
@@ -55,25 +57,24 @@ export function AdminListings() {
   const [busy, setBusy] = useState(false)
   const [dialogError, setDialogError] = useState('')
 
-  const load = useCallback(
-    async (offset = 0) => {
-      setError('')
-      const { data, error: rpcError } = await createClient().rpc('admin_listings', {
-        p_query: submitted || null,
-        p_filter: filter,
-        p_limit: PAGE + 1,
-        p_offset: offset,
-      })
-      if (rpcError) return setError(rpcError.message)
-      const page = data ?? []
-      setMore(page.length > PAGE)
-      setRows((prev) => (offset === 0 ? page.slice(0, PAGE) : [...(prev ?? []), ...page.slice(0, PAGE)]))
-    },
-    [submitted, filter],
-  )
+  const load = useCallback(async () => {
+    setError('')
+    const { data, error: rpcError } = await createClient().rpc('admin_listings', {
+      p_query: submitted || null,
+      p_filter: filter,
+      p_limit: PAGE_SIZE,
+      p_offset: page * PAGE_SIZE,
+    })
+    if (rpcError) return setError(rpcError.message)
+    const list = data ?? []
+    // After a delete, the last page can come back empty: step back one.
+    if (list.length === 0 && page > 0) return setPage(page - 1)
+    setRows(list)
+    setTotal(list[0]?.total_count ?? 0)
+  }, [submitted, filter, page])
 
   useEffect(() => {
-    const t = setTimeout(() => load(0), 0)
+    const t = setTimeout(load, 0)
     return () => clearTimeout(t)
   }, [load])
 
@@ -83,7 +84,7 @@ export function AdminListings() {
     const { error: rpcError } = await createClient().rpc('admin_restore_listing', { p_listing_id: r.id })
     if (rpcError) return setError(rpcError.message)
     setNotice(`Restored “${r.title}”. The seller was told.`)
-    load(0)
+    load()
   }
 
   function open(kind: 'take_down' | 'delete', row: Row) {
@@ -110,7 +111,7 @@ export function AdminListings() {
       setNotice(`Deleted “${row.title}” for good${result.photosRemoved ? ` and ${result.photosRemoved} photo${result.photosRemoved === 1 ? '' : 's'}` : ''}.`)
     }
     setPending(null)
-    load(0)
+    load()
   }
 
   const photoUrl = (path: string) => createClient().storage.from('listing-photos').getPublicUrl(path).data.publicUrl
@@ -127,6 +128,7 @@ export function AdminListings() {
         onSubmit={(e) => {
           e.preventDefault()
           setSubmitted(query.trim())
+          setPage(0)
         }}
         className="flex gap-2 mb-3"
       >
@@ -153,7 +155,10 @@ export function AdminListings() {
             type="button"
             role="tab"
             aria-selected={filter === f.id}
-            onClick={() => setFilter(f.id)}
+            onClick={() => {
+              setFilter(f.id)
+              setPage(0)
+            }}
             className={`px-3 py-1 rounded-full text-sm font-semibold border ${
               filter === f.id ? 'bg-[#0E4D5C] text-white border-[#0E4D5C]' : 'text-slate-600 border-slate-300'
             }`}
@@ -190,6 +195,9 @@ export function AdminListings() {
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-600 text-white">
                         {r.open_reports} report{r.open_reports === 1 ? '' : 's'}
                       </span>
+                    )}
+                    {r.seller_suspended && (
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-700 text-white">Seller suspended</span>
                     )}
                     <span className="text-xs text-slate-400">#{r.id}</span>
                   </div>
@@ -234,11 +242,15 @@ export function AdminListings() {
         </ul>
       )}
 
-      {more && rows && (
-        <button type="button" onClick={() => load(rows.length)} className="mt-3 text-sm font-semibold text-[#0E4D5C] underline">
-          Load more
-        </button>
-      )}
+      <Pager
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={total}
+        onPage={(p) => {
+          setPage(p)
+          setNotice('')
+        }}
+      />
 
       {pending && (
         <ConfirmDialog

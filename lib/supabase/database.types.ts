@@ -527,6 +527,8 @@ export type Database = {
           stripe_customer_id: string | null
           stripe_payment_method_id: string | null
           stripe_payouts_enabled: boolean
+          suspended_at: string | null
+          suspended_reason: string | null
           updated_at: string
           username: string
           username_changed_at: string | null
@@ -550,6 +552,8 @@ export type Database = {
           stripe_customer_id?: string | null
           stripe_payment_method_id?: string | null
           stripe_payouts_enabled?: boolean
+          suspended_at?: string | null
+          suspended_reason?: string | null
           updated_at?: string
           username?: string
           username_changed_at?: string | null
@@ -573,6 +577,8 @@ export type Database = {
           stripe_customer_id?: string | null
           stripe_payment_method_id?: string | null
           stripe_payouts_enabled?: boolean
+          suspended_at?: string | null
+          suspended_reason?: string | null
           updated_at?: string
           username?: string
           username_changed_at?: string | null
@@ -1158,13 +1164,45 @@ export type Database = {
           bid_count: number
           image_path: string | null
           seller_name: string
+          seller_suspended: boolean
           created_at: string
           ends_at: string | null
           open_orders: number
           all_orders: number
           open_reports: number
+          total_count: number
         }[]
       }
+      admin_users: {
+        Args: { p_query?: string | null; p_filter?: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          id: string
+          username: string
+          full_name: string | null
+          email: string | null
+          phone: string | null
+          area: string | null
+          created_at: string
+          last_sign_in_at: string | null
+          email_confirmed: boolean
+          is_admin: boolean
+          suspended_at: string | null
+          suspended_reason: string | null
+          payouts_ready: boolean
+          has_card: boolean
+          listings_live: number
+          listings_total: number
+          sales: number
+          purchases: number
+          open_orders: number
+          active_strikes: number
+          open_reports: number
+          total_count: number
+        }[]
+      }
+      admin_suspend_user: { Args: { p_user_id: string; p_reason: string }; Returns: undefined }
+      admin_unsuspend_user: { Args: { p_user_id: string }; Returns: undefined }
+      user_suspended: { Args: { p_user_id: string }; Returns: boolean }
       admin_take_down_listing: { Args: { p_listing_id: number; p_reason: string }; Returns: undefined }
       admin_restore_listing: { Args: { p_listing_id: number }; Returns: undefined }
       admin_delete_listing: { Args: { p_listing_id: number; p_reason: string }; Returns: string[] }
