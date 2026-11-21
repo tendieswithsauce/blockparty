@@ -268,6 +268,10 @@ export default function DashboardPage() {
       kind: 'info',
       text: 'Stripe still needs a few details before you can get paid. Pick up where you left off any time.',
     } as const
+    const VERIFYING_NOTICE = {
+      kind: 'info',
+      text: "You've sent Stripe everything. They're verifying your details, which usually takes a minute or two. This page updates on its own.",
+    } as const
 
     // Message after returning from Stripe payout onboarding. Read the URL only
     // once (we strip it right away) so a re-run of this effect still knows.
@@ -288,21 +292,30 @@ export default function DashboardPage() {
     }
     load()
 
-    // Stripe usually takes a few seconds to verify a seller after they submit
-    // onboarding, so right after returning keep re-checking for a little while
-    // before telling them something is still missing.
+    // Stripe verifies a seller after they submit onboarding, which can take a
+    // few seconds to a couple of minutes. While it's verifying (nothing left
+    // for the seller to fill in), keep re-checking instead of sending them
+    // back to the form.
     async function checkPayouts() {
-      const attempts = result === 'pending' ? 6 : 1
-      for (let i = 0; i < attempts; i++) {
-        if (i > 0) await new Promise((r) => setTimeout(r, 2000))
+      let wait = 2000
+      for (let i = 0; i < 40; i++) {
+        if (i > 0) await new Promise((r) => setTimeout(r, wait))
         if (cancelled) return
         const status = await getPayoutStatus().catch(() => null)
         if (cancelled) return
         setPayouts(status)
         if (status?.ready) {
-          if (result === 'pending') setNotice(READY_NOTICE)
+          if (result === 'pending' || i > 0) setNotice(READY_NOTICE)
           return
         }
+        if (status?.verifying) {
+          setNotice(VERIFYING_NOTICE)
+          wait = Math.min(wait + 1000, 6000)
+          continue
+        }
+        // Back from Stripe a moment ago: give it a few quick checks first.
+        if (result === 'pending' && i < 5) continue
+        break
       }
       if (result === 'pending') setNotice(PENDING_NOTICE)
     }
@@ -365,8 +378,14 @@ export default function DashboardPage() {
       icon: Landmark,
       title: 'Set up payouts',
       stripe: true,
-      body: 'Connect a bank account with Stripe so we can pay you when your item is picked up.',
-      action: <SetUpPayoutsButton label={payouts?.accountId ? 'Finish payout setup' : 'Set up payouts'} />,
+      body: payouts?.verifying
+        ? "Stripe is verifying your details. It usually takes a minute or two; there's nothing more to fill in."
+        : 'Connect a bank account with Stripe so we can pay you when your item is picked up.',
+      action: payouts?.verifying ? (
+        <span className="px-4 py-2 rounded-full bg-slate-100 text-slate-600 text-sm font-semibold">Verifying…</span>
+      ) : (
+        <SetUpPayoutsButton label={payouts?.accountId ? 'Finish payout setup' : 'Set up payouts'} />
+      ),
     },
     {
       done: Boolean(data?.area),

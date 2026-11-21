@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Home, ImagePlus, MapPin, Truck, X } from 'lucide-react'
+import { Camera, Home, ImagePlus, Loader2, MapPin, Truck, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { AreaSelect } from '@/components/AreaSelect'
 import { CategorySelect } from '@/components/CategorySelect'
@@ -14,22 +14,18 @@ import type { ListingCondition } from '@/lib/supabase/database.types'
 import { MAX_PRICE_CENTS, dollarsToCents, formatCents } from '@/lib/money'
 import { MIN_PRICE_CENTS, PLATFORM_FEE_LABEL, sellerPayoutCents } from '@/lib/fees'
 import { checkMyNewListing } from '@/app/listings/actions'
+import { prepareListingPhoto } from '@/lib/listing-photo'
 import type { ModerationResult } from '@/lib/moderation/check-listing'
 
 const AUCTION_DURATIONS_DAYS = [1, 3, 5, 7] as const
 const DELIVERY_KM = [5, 10, 15, 25, 50] as const
 const MAX_PHOTOS = 8
+// Every photo is shrunk and re-saved as a JPEG in the browser before upload
+// (lib/listing-photo.ts), which also strips its location data. This is just a
+// last check against the bucket's 5 MB limit.
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024
-// Matches the bucket's allowed types. HEIC is left out: most browsers can't display it.
-const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
 type Photo = { file: File; preview: string }
-
-function extensionFor(file: File) {
-  const fromName = file.name.split('.').pop()?.toLowerCase()
-  if (fromName && /^[a-z0-9]{2,5}$/.test(fromName)) return fromName
-  return file.type.split('/')[1] ?? 'jpg'
-}
 
 export function CreateListingModal({
   defaultArea,
@@ -62,6 +58,8 @@ export function CreateListingModal({
   const [status, setStatus] = useState('')
   const [saving, setSaving] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
+  const cameraInput = useRef<HTMLInputElement>(null)
+  const [preparing, setPreparing] = useState(false)
   const photosRef = useRef<Photo[]>([])
   useEffect(() => {
     photosRef.current = photos
@@ -84,28 +82,31 @@ export function CreateListingModal({
   // Free the preview object URLs when the modal closes.
   useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.preview)), [])
 
-  function addFiles(files: FileList | null) {
-    if (!files) return
+  async function addFiles(input: HTMLInputElement) {
+    const files = input.files ? Array.from(input.files) : []
+    // Clear now so picking the same photo again still fires a change.
+    input.value = ''
+    if (files.length === 0) return
     setError('')
+    const room = MAX_PHOTOS - photosRef.current.length
+    if (files.length > room) setError(`You can add up to ${MAX_PHOTOS} photos.`)
+    setPreparing(true)
     const next: Photo[] = []
-    for (const file of Array.from(files)) {
-      if (!PHOTO_TYPES.includes(file.type)) {
-        setError(`${file.name} isn't a supported image. Use JPG, PNG or WebP.`)
-        continue
+    for (const original of files.slice(0, Math.max(room, 0))) {
+      try {
+        const file = await prepareListingPhoto(original)
+        if (file.size > MAX_PHOTO_BYTES) throw new Error('too big')
+        next.push({ file, preview: URL.createObjectURL(file) })
+      } catch {
+        setError(`We couldn't use ${original.name || 'that photo'}. Try a JPG or PNG photo.`)
       }
-      if (file.size > MAX_PHOTO_BYTES) {
-        setError(`${file.name} is over 5 MB.`)
-        continue
-      }
-      next.push({ file, preview: URL.createObjectURL(file) })
     }
+    setPreparing(false)
     setPhotos((current) => {
-      const room = MAX_PHOTOS - current.length
-      if (next.length > room) setError(`You can add up to ${MAX_PHOTOS} photos.`)
-      next.slice(room).forEach((p) => URL.revokeObjectURL(p.preview))
-      return [...current, ...next.slice(0, room)]
+      const space = MAX_PHOTOS - current.length
+      next.slice(space).forEach((p) => URL.revokeObjectURL(p.preview))
+      return [...current, ...next.slice(0, space)]
     })
-    if (fileInput.current) fileInput.current.value = ''
   }
 
   function removePhoto(index: number) {
@@ -190,7 +191,7 @@ export function CreateListingModal({
     const uploaded: string[] = []
     for (const [i, photo] of photos.entries()) {
       setStatus(`Uploading photo ${i + 1} of ${photos.length}…`)
-      const path = `${user.id}/${crypto.randomUUID()}.${extensionFor(photo.file)}`
+      const path = `${user.id}/${crypto.randomUUID()}.jpg`
       const { error: uploadError } = await supabase.storage
         .from('listing-photos')
         .upload(path, photo.file, { contentType: photo.file.type, cacheControl: '31536000' })
@@ -287,27 +288,55 @@ export function CreateListingModal({
                   </button>
                 </div>
               ))}
-              {photos.length < MAX_PHOTOS && (
-                <button
-                  type="button"
-                  onClick={() => fileInput.current?.click()}
-                  disabled={saving}
-                  className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center gap-1 text-slate-500 hover:border-[#0E4D5C] hover:text-[#0E4D5C] transition"
-                >
-                  <ImagePlus className="w-6 h-6" />
-                  <span className="text-xs font-medium">Add photos</span>
-                </button>
+              {preparing && (
+                <div className="aspect-square rounded-lg border bg-slate-50 flex flex-col items-center justify-center gap-1 text-slate-500">
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                  <span className="text-xs font-medium">Adding…</span>
+                </div>
+              )}
+              {photos.length < MAX_PHOTOS && !preparing && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => cameraInput.current?.click()}
+                    disabled={saving}
+                    className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center gap-1 text-slate-500 hover:border-[#0E4D5C] hover:text-[#0E4D5C] transition"
+                  >
+                    <Camera className="w-6 h-6" />
+                    <span className="text-xs font-medium">Take photo</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fileInput.current?.click()}
+                    disabled={saving}
+                    className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center gap-1 text-slate-500 hover:border-[#0E4D5C] hover:text-[#0E4D5C] transition"
+                  >
+                    <ImagePlus className="w-6 h-6" />
+                    <span className="text-xs font-medium">Choose photos</span>
+                  </button>
+                </>
               )}
             </div>
+            {/* Phones open the camera for this one; computers fall back to a file picker. */}
+            <input
+              ref={cameraInput}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => addFiles(e.currentTarget)}
+            />
             <input
               ref={fileInput}
               type="file"
-              accept={PHOTO_TYPES.join(',')}
+              accept="image/*"
               multiple
               className="hidden"
-              onChange={(e) => addFiles(e.target.files)}
+              onChange={(e) => addFiles(e.currentTarget)}
             />
-            <p className="mt-1 text-xs text-gray-500">JPG, PNG or WebP, up to 5 MB each.</p>
+            <p className="mt-1 text-xs text-gray-500">
+              Up to {MAX_PHOTOS} photos. We resize them and remove location data before they&apos;re posted.
+            </p>
           </div>
 
           <div>
@@ -560,7 +589,7 @@ export function CreateListingModal({
             </button>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || preparing}
               className="px-5 py-2 bg-[#F26B5B] text-white font-semibold rounded-full hover:bg-[#e05a4a] disabled:opacity-60"
             >
               {saving ? 'Publishing…' : 'Publish listing'}

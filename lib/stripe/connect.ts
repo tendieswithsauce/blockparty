@@ -17,8 +17,14 @@ export type PayoutStatus = {
   accountId: string | null
   /** Seller finished onboarding: Stripe accepts transfers to them and pays out to their bank. */
   ready: boolean
-  /** Started onboarding but Stripe still needs details. */
+  /** Stripe is waiting on the seller for details (finish onboarding). */
   needsDetails: boolean
+  /**
+   * The seller has given everything; Stripe is still checking it. This takes
+   * a few seconds to a couple of minutes after onboarding, so don't send
+   * them back to the form.
+   */
+  verifying: boolean
 }
 
 function recipientBalance(account: V2Account) {
@@ -108,10 +114,10 @@ export async function syncPayoutStatus(userId: string): Promise<PayoutStatus> {
     .eq('id', userId)
     .single()
   const accountId = profile?.stripe_account_id ?? null
-  if (!accountId) return { accountId: null, ready: false, needsDetails: false }
+  if (!accountId) return { accountId: null, ready: false, needsDetails: false, verifying: false }
 
   const account = await getStripe().v2.core.accounts.retrieve(accountId, {
-    include: ['configuration.recipient'],
+    include: ['configuration.recipient', 'requirements'],
   })
   const ready = accountReady(account)
   // Sellers only receive transfers; card charges happen on Blockparty's account.
@@ -124,5 +130,11 @@ export async function syncPayoutStatus(userId: string): Promise<PayoutStatus> {
       .eq('id', userId)
   }
 
-  return { accountId, ready, needsDetails: !ready }
+  // Anything Stripe needs from the seller themselves means back to the form;
+  // otherwise a not-yet-active account is Stripe still verifying.
+  const sellerOwesDetails = (account.requirements?.entries ?? []).some((e) => e.awaiting_action_from === 'user')
+  const capabilities = [recipientBalance(account)?.stripe_transfers?.status, recipientBalance(account)?.payouts?.status]
+  const verifying = !ready && !sellerOwesDetails && capabilities.some((c) => c === 'pending' || c === 'active')
+
+  return { accountId, ready, needsDetails: !ready && !verifying, verifying }
 }

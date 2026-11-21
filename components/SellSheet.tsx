@@ -22,7 +22,7 @@ export const LISTING_CREATED_EVENT = 'blockparty:listing-created'
 type View =
   | { kind: 'closed' }
   | { kind: 'checking' }
-  | { kind: 'payouts'; hasAccount: boolean }
+  | { kind: 'payouts'; hasAccount: boolean; verifying: boolean }
   | { kind: 'create'; areaId?: string }
   | { kind: 'done'; result: ModerationResult }
 
@@ -44,7 +44,11 @@ export function useSellSheet({ onDashboard }: { onDashboard: boolean }) {
     // Not ready on our side: ask Stripe, in case they finished setup since we last checked.
     const status = await getPayoutStatus().catch(() => null)
     if (status?.ready) return setView({ kind: 'create', areaId: profile?.area_id ?? undefined })
-    setView({ kind: 'payouts', hasAccount: Boolean(status?.accountId ?? profile?.stripe_account_id) })
+    setView({
+      kind: 'payouts',
+      hasAccount: Boolean(status?.accountId ?? profile?.stripe_account_id),
+      verifying: Boolean(status?.verifying),
+    })
   }
 
   const close = () => setView({ kind: 'closed' })
@@ -60,17 +64,18 @@ export function useSellSheet({ onDashboard }: { onDashboard: boolean }) {
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true">
         <div className="bg-white max-w-md w-full p-6 rounded-2xl space-y-4">
           <Landmark className="w-8 h-8 text-[#0E4D5C]" />
-          <h2 className="text-xl font-bold">Set up payouts first</h2>
+          <h2 className="text-xl font-bold">{view.verifying ? 'Stripe is verifying your details' : 'Set up payouts first'}</h2>
           <p className="text-slate-600 text-sm">
-            Before you list an item, connect a bank account with Stripe so we can send you the money once your buyer picks it
-            up. It takes about 5 minutes.
+            {view.verifying
+              ? "You've sent Stripe everything they need. Verification usually takes a minute or two; try again shortly."
+              : 'Before you list an item, connect a bank account with Stripe so we can send you the money once your buyer picks it up. It takes about 5 minutes.'}
           </p>
           <SecuredByStripe text="Your identity and bank details go straight to Stripe, not to Blockparty." />
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={close} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">
-              Not now
+              {view.verifying ? 'OK' : 'Not now'}
             </button>
-            <SetUpPayoutsButton label={view.hasAccount ? 'Finish payout setup' : 'Set up payouts'} />
+            {!view.verifying && <SetUpPayoutsButton label={view.hasAccount ? 'Finish payout setup' : 'Set up payouts'} />}
           </div>
         </div>
       </div>
