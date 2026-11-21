@@ -21,15 +21,18 @@ import { createClient } from '@/lib/supabase/client'
 import { areaLabel } from '@/lib/areas'
 import { formatMeetupTime } from '@/lib/orders'
 import { formatCents } from '@/lib/money'
+import { MIN_PRICE_CENTS } from '@/lib/fees'
 import { SiteHeader } from '@/components/SiteHeader'
 import { LISTING_CREATED_EVENT } from '@/components/SellSheet'
 import type { ModerationResult } from '@/lib/moderation/check-listing'
 import { CreateListingModal } from '@/components/dashboard/CreateListingModal'
 import { SavedSearches } from '@/components/dashboard/SavedSearches'
 import { ConvertToAuctionModal } from '@/components/dashboard/ConvertToAuctionModal'
+import { RelistAuctionModal } from '@/components/dashboard/RelistAuctionModal'
 import { PayoutDashboardButton, SetUpPayoutsButton } from '@/components/dashboard/PayoutButton'
 import { getPayoutStatus } from '@/app/payouts/actions'
 import type { PayoutStatus } from '@/lib/stripe/connect'
+import { SecuredByStripe, StripeBadge } from '@/components/StripeBadge'
 
 type MyListing = {
   id: number
@@ -47,6 +50,7 @@ type MyListing = {
   reserve: { reserve_cents: number } | null
   watch_count: number
   converted_at: string | null
+  relisted_as: number | null
   review_status: 'pending' | 'approved' | 'rejected'
   moderation_reason: string | null
 }
@@ -165,6 +169,7 @@ export default function DashboardPage() {
   const [converting, setConverting] = useState<MyListing | null>(null)
   const [listingView, setListingView] = useState<ListingTab>('active')
   const [relisting, setRelisting] = useState<number | null>(null)
+  const [relistingAuction, setRelistingAuction] = useState<MyListing | null>(null)
   const payoutReturn = useRef<string | null | undefined>(undefined)
   const [notice, setNotice] = useState<{ kind: 'success' | 'info' | 'error'; text: string } | null>(null)
 
@@ -181,7 +186,7 @@ export default function DashboardPage() {
       supabase.from('profiles').select('full_name, area_id, stripe_payment_method_id, area:areas(name, city)').eq('id', user.id).single(),
       supabase
         .from('listings')
-        .select('id, title, listing_type, status, image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, watch_count, converted_at, review_status, moderation_reason, reserve:listing_reserves(reserve_cents)')
+        .select('id, title, listing_type, status, image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, watch_count, converted_at, relisted_as, review_status, moderation_reason, reserve:listing_reserves(reserve_cents)')
         .eq('seller_id', user.id)
         .order('created_at', { ascending: false }),
       // Bidder ids aren't readable through the API; my_bids() returns your own (newest first).
@@ -449,6 +454,7 @@ export default function DashboardPage() {
             <div className="h-2 rounded-full bg-slate-100 mb-6 overflow-hidden">
               <div className="h-full bg-[#0E4D5C] transition-all" style={{ width: `${(stepsDone / steps.length) * 100}%` }} />
             </div>
+            <SecuredByStripe className="mb-2" text="Cards and payouts are handled by Stripe." />
             <ul className="divide-y">
               {steps.map((step) => (
                 <li key={step.title} className="flex flex-wrap items-center gap-4 py-4">
@@ -490,7 +496,10 @@ export default function DashboardPage() {
             <span className="flex items-center gap-2 text-sm">
               <Landmark className="w-4 h-4 text-green-600" /> Payouts are active. Earnings are sent to your bank as soon as the buyer accepts the item.
             </span>
-            <PayoutDashboardButton />
+            <div className="flex items-center gap-3">
+              <StripeBadge size="sm" />
+              <PayoutDashboardButton />
+            </div>
           </div>
         )}
 
@@ -607,6 +616,23 @@ export default function DashboardPage() {
                           <RotateCcw className="w-4 h-4" /> {relisting === l.id ? 'Relisting…' : 'Relist'}
                         </button>
                       )}
+                      {l.listing_type === 'auction' && l.status === 'inactive' && l.review_status !== 'rejected' &&
+                        (l.relisted_as ? (
+                          <Link
+                            href={`/listings/${l.relisted_as}`}
+                            className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-[#F26B5B]"
+                          >
+                            <RotateCcw className="w-4 h-4" /> Relisted · view
+                          </Link>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setRelistingAuction(l)}
+                            className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0E4D5C] hover:text-[#F26B5B]"
+                          >
+                            <RotateCcw className="w-4 h-4" /> Relist
+                          </button>
+                        ))}
                     </div>
                   </li>
                 )
@@ -744,6 +770,7 @@ export default function DashboardPage() {
               Before you list an item, connect a bank account with Stripe so we can send you the money once your buyer picks it up.
               It takes about 5 minutes.
             </p>
+            <SecuredByStripe text="Your identity and bank details go straight to Stripe, not to Blockparty." />
             <div className="flex justify-end gap-3 pt-2">
               <button onClick={() => setShowPayoutPrompt(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">
                 Not now
@@ -752,6 +779,25 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {relistingAuction && (
+        <RelistAuctionModal
+          listing={{
+            id: relistingAuction.id,
+            title: relistingAuction.title,
+            startCents: relistingAuction.starting_price_cents ?? MIN_PRICE_CENTS,
+            reserveCents: relistingAuction.reserve?.reserve_cents ?? null,
+            bidCount: relistingAuction.bid_count,
+          }}
+          onClose={() => setRelistingAuction(null)}
+          onRelisted={() => {
+            setRelistingAuction(null)
+            setNotice({ kind: 'success', text: `${relistingAuction.title} is up for auction again.` })
+            setListingView('active')
+            load()
+          }}
+        />
       )}
 
       {converting && (

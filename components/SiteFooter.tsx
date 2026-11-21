@@ -2,6 +2,7 @@
 // The deep-teal footer used on public pages (home, Browse, legal pages),
 // with the site links and the Terms of Use / Privacy Policy.
 import Link from 'next/link'
+import { StripeBadge } from '@/components/StripeBadge'
 
 export function SiteFooter() {
   const link = 'hover:text-white transition'
@@ -36,7 +37,10 @@ export function SiteFooter() {
           </Link>
         </nav>
       </div>
-      <p className="max-w-6xl mx-auto mt-8 text-xs text-slate-300">© Blockparty</p>
+      <div className="max-w-6xl mx-auto mt-8 flex flex-wrap items-center gap-4">
+        <StripeBadge variant="white" />
+        <p className="text-xs text-slate-300">© Blockparty</p>
+      </div>
     </footer>
   )
 }

@@ -20,6 +20,7 @@ import { SiteHeader } from '@/components/SiteHeader'
 import { SiteFooter } from '@/components/SiteFooter'
 import { HomeListings } from '@/components/home/HomeListings'
 import { PLATFORM_FEE_LABEL } from '@/lib/fees'
+import { StripeBadge } from '@/components/StripeBadge'
 
 const STEPS = [
   {
@@ -150,6 +151,10 @@ export default function HomePage() {
             <p className="mt-6 text-center text-sm text-[#0E4D5C] flex items-center justify-center gap-2">
               <Truck className="w-4 h-4" aria-hidden /> No shipping, no boxes: everything changes hands locally.
             </p>
+            <div className="mt-4 flex flex-col items-center gap-2 text-center text-sm text-slate-600">
+              <StripeBadge />
+              <span>Card holds, payments and seller payouts are processed by Stripe.</span>
+            </div>
           </div>
         </section>
 

@@ -21,6 +21,7 @@ import { OrderChat } from '@/components/orders/OrderChat'
 import { OrderReview } from '@/components/orders/OrderReview'
 import { SafetyMenu } from '@/components/SafetyMenu'
 import { cancelOrder, completeHandoff } from '@/app/orders/actions'
+import { SecuredByStripe } from '@/components/StripeBadge'
 
 type Spot = {
   id: string
@@ -711,6 +712,7 @@ function HandoffForm({
       <button type="submit" disabled={saving} className={`${primaryBtn} w-full`}>
         {saving ? 'Completing…' : 'Complete sale'}
       </button>
+      <SecuredByStripe text="The charge and your payout are handled by Stripe." />
       <LocationNote />
     </form>
   )
@@ -841,6 +843,7 @@ function BuyerCode({
         Check the item first. Only give this code to {sellerName} once you&apos;re happy with it: entering it charges your card{' '}
         {formatCents(amountCents)}. If the item isn&apos;t as described, keep the code and cancel the order below.
       </p>
+      <SecuredByStripe text="Your payment is handled by Stripe." />
       <LocationNote />
     </div>
   )
@@ -939,11 +942,21 @@ function AfterCancel({ listing, onDone }: { listing: NonNullable<Order['listing'
   }
 
   if (listing.listing_type === 'auction') {
-    const text =
-      listing.status === 'inactive'
-        ? 'The auction has ended without a sale.'
-        : "We offered it to the next-highest bidder who met your price. You'll get a notification when they win it."
-    return <p className="text-sm text-slate-600">{text}</p>
+    if (listing.status === 'inactive') {
+      return (
+        <p className="text-sm text-slate-600">
+          The auction has ended without a sale.{' '}
+          <Link href="/dashboard" className="font-semibold text-[#0E4D5C] underline">
+            Relist it from your dashboard
+          </Link>
+        </p>
+      )
+    }
+    return (
+      <p className="text-sm text-slate-600">
+        We offered it to the next-highest bidder who met your price. You&apos;ll get a notification when they win it.
+      </p>
+    )
   }
   if (listing.status === 'active') {
     return (

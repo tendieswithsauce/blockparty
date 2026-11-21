@@ -14,6 +14,7 @@ import { CreateListingModal } from '@/components/dashboard/CreateListingModal'
 import { SetUpPayoutsButton } from '@/components/dashboard/PayoutButton'
 import { getPayoutStatus } from '@/app/payouts/actions'
 import type { ModerationResult } from '@/lib/moderation/check-listing'
+import { SecuredByStripe } from '@/components/StripeBadge'
 
 /** Fired after a listing is created from the Sell sheet (detail: the moderation result). */
 export const LISTING_CREATED_EVENT = 'blockparty:listing-created'
@@ -64,6 +65,7 @@ export function useSellSheet({ onDashboard }: { onDashboard: boolean }) {
             Before you list an item, connect a bank account with Stripe so we can send you the money once your buyer picks it
             up. It takes about 5 minutes.
           </p>
+          <SecuredByStripe text="Your identity and bank details go straight to Stripe, not to Blockparty." />
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={close} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">
               Not now

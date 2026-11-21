@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js'
+import { StripeBadge } from '@/components/StripeBadge'
 import {
   completeSetupIntent,
   createSetupIntent,
@@ -122,10 +123,13 @@ export function PaymentMethodSection() {
 
   return (
     <div id="payment-method" className="bg-white border rounded-xl p-8 shadow-sm mt-6 scroll-mt-24">
-      <h2 className="text-xl font-bold mb-1">Payment method</h2>
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
+        <h2 className="text-xl font-bold">Payment method</h2>
+        <StripeBadge />
+      </div>
       <p className="text-sm text-gray-500 mb-5">
-        Saved securely with Stripe. When you win an auction or buy a set-price item we place a hold on it, and you&apos;re only
-        charged once you&apos;ve met the seller and accepted the item.
+        Saved securely with Stripe; Blockparty never sees or stores your full card number. When you win an auction or buy a
+        set-price item we place a hold on it, and you&apos;re only charged once you&apos;ve met the seller and accepted the item.
       </p>
 
       {error && <div className="mb-4 p-3 text-sm rounded-lg bg-red-50 text-red-700">{error}</div>}

@@ -237,6 +237,7 @@ export type Database = {
           moderation_reason: string | null
           offers_meetup: boolean
           offers_pickup: boolean
+          relisted_as: number | null
           reserve_met: boolean
           review_status: ReviewStatus
           search_vector: unknown
@@ -270,6 +271,7 @@ export type Database = {
           moderation_attempts?: number
           moderation_checked_at?: string | null
           moderation_reason?: string | null
+          relisted_as?: number | null
           reserve_met?: boolean
           review_status?: ReviewStatus
           search_vector?: unknown
@@ -303,6 +305,7 @@ export type Database = {
           moderation_attempts?: number
           moderation_checked_at?: string | null
           moderation_reason?: string | null
+          relisted_as?: number | null
           reserve_met?: boolean
           review_status?: ReviewStatus
           search_vector?: unknown
@@ -1195,6 +1198,11 @@ export type Database = {
         Returns: undefined
       }
       relist_listing: { Args: { p_listing_id: number }; Returns: undefined }
+      relist_auction: {
+        Args: { p_listing_id: number; p_duration_days: number; p_price_cents: number; p_reserve_cents?: number | null }
+        Returns: number
+      }
+      mark_relisted: { Args: { p_old: number; p_new: number }; Returns: undefined }
       remove_question: { Args: { p_question_id: number }; Returns: undefined }
       claim_safety_alerts: {
         Args: { p_limit?: number }

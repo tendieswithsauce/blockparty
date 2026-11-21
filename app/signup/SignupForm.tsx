@@ -10,6 +10,7 @@ import { SubmitButton, TextField } from '@/components/auth/fields'
 import { DisplayNameField, type NameStatus } from '@/components/DisplayNameField'
 import { AreaSelect } from '@/components/AreaSelect'
 import { WHY } from '@/lib/profile-rules'
+import { SecuredByStripe } from '@/components/StripeBadge'
 
 const initialState: AuthFormState = {}
 const input =
@@ -151,6 +152,7 @@ export function SignupForm() {
           <strong className="text-slate-700">Payment method:</strong> you can add a card right after you confirm your email.{' '}
           {WHY.payment}
         </p>
+        <SecuredByStripe text="Cards are saved securely with Stripe." />
 
         <SubmitButton pending={pending} disabled={nameStatus === 'checking' || nameStatus === 'bad'}>Create account</SubmitButton>
       </form>

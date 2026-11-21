@@ -44,6 +44,8 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `cancel_order` | transaction_id, user_id, reason | text | service | definer | Cancels an order with a reason. Set Price listings pause (inactive); an auction the buyer backed out of goes back to active so close_auction offers it to the next bidder. |
 | `passes_to_next_bidder` | transactions row | boolean | (internal) | invoker | Did the buyer back out (buyer cancelled, or seller reported a buyer no-show)? |
 | `relist_listing` | listing_id | void | auth, service | definer | Seller puts a paused Set Price listing back up. |
+| `relist_auction` | listing_id, duration_days, price_cents, reserve_cents | bigint (new listing id) | auth, service | invoker | Relists an auction that ended without a sale as a new listing (same details and photos); runs create_listing with the seller's own rights. |
+| `mark_relisted` | old_id, new_id | void | auth, service | definer | Sets listings.relisted_as on the old auction (only from relist_auction). |
 | `release_stale_purchases` | | table | service | definer | Finds stale pending purchases to release. |
 | `expired_orders` | | setof bigint | service | definer | Orders past their handoff deadline. |
 | `complete_order` | transaction_id, transfer_id | void | service | definer | Marks an order complete after payout. |
