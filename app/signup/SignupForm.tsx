@@ -38,7 +38,7 @@ export function SignupForm() {
     <div className="space-y-6">
       <FormAlert error={state.error} />
 
-      <GoogleButton next="/dashboard" />
+      <GoogleButton next="/dashboard" showTerms={false} />
 
       <form action={formAction} className="space-y-4">
         <DisplayNameField value={username} onChange={setUsername} onStatus={setNameStatus} generateInitial />

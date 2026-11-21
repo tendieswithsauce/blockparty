@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { TesterFeedback } from '@/components/admin/TesterFeedback'
+import { AdminListings } from '@/components/admin/AdminListings'
 import { CheckCircle2, Flag, ShieldAlert, XCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCents } from '@/lib/money'
@@ -75,6 +76,7 @@ export default function AdminPage() {
             <Reports rows={reports} onDone={load} />
             <TesterFeedback />
             <ReviewQueue items={queue} onDone={load} />
+            <AdminListings />
             <CharityQueue items={charities} onDone={load} />
             {feeCap !== null && <FeeCapSetting cents={feeCap} onDone={load} />}
             <Strikes rows={strikes} onDone={load} />

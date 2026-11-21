@@ -1144,6 +1144,30 @@ export type Database = {
           viewport: string | null
         }[]
       }
+      admin_listings: {
+        Args: { p_query?: string | null; p_filter?: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          id: number
+          title: string
+          listing_type: Database['public']['Enums']['listing_type']
+          status: Database['public']['Enums']['listing_status']
+          review_status: string
+          moderation_reason: string | null
+          moderated_by: string | null
+          price_cents: number | null
+          bid_count: number
+          image_path: string | null
+          seller_name: string
+          created_at: string
+          ends_at: string | null
+          open_orders: number
+          all_orders: number
+          open_reports: number
+        }[]
+      }
+      admin_take_down_listing: { Args: { p_listing_id: number; p_reason: string }; Returns: undefined }
+      admin_restore_listing: { Args: { p_listing_id: number }; Returns: undefined }
+      admin_delete_listing: { Args: { p_listing_id: number; p_reason: string }; Returns: string[] }
       admin_set_feedback_status: {
         Args: { p_id: number; p_note?: string | null; p_status: 'new' | 'done' }
         Returns: undefined

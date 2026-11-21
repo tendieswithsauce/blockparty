@@ -138,6 +138,10 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `admin_handoff_locations` | transaction_id | table | auth, service | Handoff GPS for one order. |
 | `admin_feedback` | | table | auth, service | Tester feedback from the dev site's Feedback button, open items first. |
 | `admin_set_feedback_status` | id, status, note | void | auth, service | Mark tester feedback done (or new again), with an optional note. |
+| `admin_listings` | query, filter, limit, offset | table | auth, service | Every listing, searchable by title, seller or id; filters all / live / reported / in_review / taken_down / inactive / sold. |
+| `admin_take_down_listing` | listing_id, reason | void | auth, service | Hide a listing (rejected, inactive); the seller is told why. Open orders carry on. |
+| `admin_restore_listing` | listing_id | void | auth, service | Undo a take-down; Set Price goes back up, an auction only if it hasn't ended. Seller is told. |
+| `admin_delete_listing` | listing_id, reason | text[] | auth, service | Delete a listing that never had an order; returns photo paths no other listing uses (app/admin/actions.ts removes them). |
 
 ## Formatting helpers
 
@@ -147,7 +151,8 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 
 | Function | Fires on | Does |
 |---|---|---|
-| `handle_new_user`, `handle_user_email_change` | auth users | Create or sync the profile. |
+| `handle_new_user`, `handle_user_email_change` | auth users | Create or sync the profile. handle_new_user also copies the sign-up details (area, phone, address, emergency contact). |
+| `stash_signup_details` | auth users (before insert) | Strips the bp_ sign-up keys from the stored metadata and hands them to handle_new_user in the same transaction. |
 | `lock_auction_with_bids` | listings | Once an auction has bids, the seller can't edit it or take it down. |
 | `assign_bidder_no` | bids | Numbers bidders per auction (1, 2, …) in order of first bid; a repeat bidder keeps their number. |
 | `set_updated_at` | many tables | Maintains `updated_at`. |

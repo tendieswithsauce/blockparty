@@ -1,12 +1,17 @@
 // components/auth/GoogleButton.tsx
 // Hidden unless NEXT_PUBLIC_ENABLE_GOOGLE_AUTH=true, so the button only appears
 // once the Google provider is configured in Supabase (Auth > Providers).
+import Link from 'next/link'
 import { signInWithGoogle } from '@/app/auth/actions'
 import { Divider } from '@/components/auth/fields'
 
 export const googleAuthEnabled = process.env.NEXT_PUBLIC_ENABLE_GOOGLE_AUTH === 'true'
 
-export function GoogleButton({ next }: { next?: string }) {
+/**
+ * showTerms: Google creates the account on first use, so wherever the sign-up
+ * page's own consent line isn't shown (e.g. the sign-in page), show it here.
+ */
+export function GoogleButton({ next, showTerms = true }: { next?: string; showTerms?: boolean }) {
   if (!googleAuthEnabled) return null
 
   return (
@@ -26,6 +31,19 @@ export function GoogleButton({ next }: { next?: string }) {
           Continue with Google
         </button>
       </form>
+      {showTerms && (
+        <p className="text-xs text-slate-500 text-center -mt-2">
+          New here? Continuing with Google creates your account, and confirms you&apos;re 18 or older and agree to the{' '}
+          <Link href="/terms" className="underline">
+            Terms of Use
+          </Link>{' '}
+          and{' '}
+          <Link href="/privacy" className="underline">
+            Privacy Policy
+          </Link>
+          .
+        </p>
+      )}
       <Divider label="Or with email" />
     </>
   )

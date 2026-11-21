@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase/server'
 import { siteUrl } from '@/lib/site-url'
 import { safeNextPath } from '@/lib/auth/redirect'
 import { afterSignIn } from '@/lib/auth/onboarding'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { optionalDetailsProblem, phoneProblem } from '@/lib/profile-rules'
 
 export type AuthFormState = {
@@ -81,9 +80,21 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
     email,
     password,
     options: {
-      // Picked up by the handle_new_user() trigger into profiles. If the
-      // display name was taken in the meantime, a random one is used instead.
-      data: { full_name: fullName, username },
+      // Picked up by the new-user triggers into profiles. If the display name
+      // was taken in the meantime, a random one is used instead. The bp_ keys
+      // are stripped from the stored metadata (stash_signup_details()), so the
+      // address and emergency contact never land in auth.users or the session
+      // token. They only apply when an account is actually created: a repeat
+      // sign-up for an existing email can't change anyone's profile.
+      data: {
+        full_name: fullName,
+        username,
+        bp_area_id: areaId,
+        bp_phone: phone,
+        bp_home_address: homeAddress,
+        bp_ec_name: ecEmail ? ecName : '',
+        bp_ec_email: ecEmail,
+      },
       emailRedirectTo: `${await siteUrl()}/auth/callback?next=/dashboard`,
     },
   })
@@ -100,23 +111,6 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
   // fake success (a user with no identities) and sends no email.
   if (data.user && data.user.identities?.length === 0) {
     return { error: 'An account with this email already exists. Sign in, or reset your password if you forgot it.' }
-  }
-
-  // The rest of the profile goes straight into the row handle_new_user() made
-  // (not into user metadata, which ends up in the session token).
-  if (data.user) {
-    const { error: profileError } = await createAdminClient()
-      .from('profiles')
-      .update({
-        area_id: areaId,
-        phone,
-        home_address: homeAddress || null,
-        emergency_contact_name: ecEmail ? ecName || null : null,
-        emergency_contact_email: ecEmail || null,
-      })
-      .eq('id', data.user.id)
-    // Not fatal: the welcome step asks again for anything missing.
-    if (profileError) console.error('signUp: saving profile details failed', data.user.id, profileError.message)
   }
 
   // Email confirmation turned off in Supabase: the user is signed in already.
