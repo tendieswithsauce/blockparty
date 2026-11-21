@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Suspense } from "react";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
+import { InstallPromptListener } from "@/lib/install-prompt";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -45,6 +46,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         {children}
+        {/* Catches Chrome's install prompt for the "Install Blockparty" buttons. */}
+        <InstallPromptListener />
         {/* Tester feedback button: dev site and local development only. */}
         <Suspense fallback={null}>
           <FeedbackWidget />

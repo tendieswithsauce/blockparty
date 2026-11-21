@@ -30,6 +30,7 @@ import { SavedSearches } from '@/components/dashboard/SavedSearches'
 import { ConvertToAuctionModal } from '@/components/dashboard/ConvertToAuctionModal'
 import { RelistAuctionModal } from '@/components/dashboard/RelistAuctionModal'
 import { ManageListing, canManage } from '@/components/listing/ManageListing'
+import { InstallAppButton } from '@/components/InstallAppButton'
 import { PayoutDashboardButton, SetUpPayoutsButton } from '@/components/dashboard/PayoutButton'
 import { getPayoutStatus } from '@/app/payouts/actions'
 import type { PayoutStatus } from '@/lib/stripe/connect'
@@ -463,6 +464,8 @@ export default function DashboardPage() {
             {notice.text}
           </div>
         )}
+
+        <InstallAppButton variant="card" />
 
         {/* Getting started */}
         {data && stepsDone < steps.length && (

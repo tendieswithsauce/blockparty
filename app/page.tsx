@@ -21,6 +21,7 @@ import { SiteFooter } from '@/components/SiteFooter'
 import { HomeListings } from '@/components/home/HomeListings'
 import { PLATFORM_FEE_LABEL } from '@/lib/fees'
 import { StripeBadge } from '@/components/StripeBadge'
+import { InstallAppButton } from '@/components/InstallAppButton'
 
 const STEPS = [
   {
@@ -80,7 +81,11 @@ export default function HomePage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#A8D5BA]/40 text-[#0E4D5C] text-xs font-bold uppercase tracking-wider">
               <HomeIcon className="w-3.5 h-3.5" /> Your NEW local marketplace
             </div>
-            <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-[#F26B5B]">Blockparty</h1>
+            <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-[#F26B5B]">
+              Blockparty
+              {/* Beta tag: remove at full launch (also in components/BrandLogo.tsx). */}
+              <sup className="ml-1 align-super text-[0.3em] font-bold uppercase tracking-wider text-[#0E4D5C]">beta</sup>
+            </h1>
             <p className="text-xl sm:text-2xl font-medium text-[#334155]">
               Buy, sell and bid with your neighbours!
             </p>
@@ -101,6 +106,10 @@ export default function HomePage() {
             </Link>
           </div>
           <p className="mt-3 text-xs text-slate-500">Anyone can browse. A free account lets you buy, bid and sell.</p>
+          {/* Only shows where the phone can install it, and not inside the installed app. */}
+          <div className="mt-5 flex justify-center">
+            <InstallAppButton variant="hero" />
+          </div>
         </section>
 
         {/* Real listings */}
