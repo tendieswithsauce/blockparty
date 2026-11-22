@@ -71,7 +71,12 @@ type Order = {
 type Suggestion = Spot & { buyer_km: number; seller_km: number }
 
 /** Where a pickup or delivery happens (null address = not shown yet). */
-type HomePlace = { method: HandoffMethod; address: string | null; hiddenUntil: string | null }
+type HomePlace = {
+  method: HandoffMethod
+  address: string | null
+  hiddenUntil: string | null
+  hiddenReason: 'no_time' | 'before_time' | null
+}
 
 const ORDER_COLUMNS =
   'id, buyer_id, seller_id, amount_cents, platform_fee_cents, status, authorized_at, proposed_times, proposed_by, proposal_note, meetup_at, meetup_deadline, picked_up_at, cancel_reason, canceled_by, handoff_method, delivery_fee_cents, payout_due_at, paid_out_at, payout_on_hold, refunded_cents, refunded_at, listing:listings(id, title, image_paths, listing_type, status, area:areas(name, city, timezone)), spot:meetup_spots(id, name, address, kind, lat, lng, timezone, notes)'
@@ -143,8 +148,26 @@ export function OrderView({ id }: { id: number }) {
     setNames({ buyer: n?.[0]?.buyer_name || 'The buyer', seller: n?.[0]?.seller_name || 'The seller' })
     setCode((codeRes.data as string | null) ?? null)
     setSuggestions((suggestRes.data as Suggestion[] | null) ?? [])
-    const place = (placeRes.data as { method: HandoffMethod; address: string | null; address_hidden_until: string | null }[] | null)?.[0]
-    setHome(place ? { method: place.method, address: place.address, hiddenUntil: place.address_hidden_until } : null)
+    const place = (
+      placeRes.data as
+        | {
+            method: HandoffMethod
+            address: string | null
+            address_hidden_until: string | null
+            address_hidden_reason: 'no_time' | 'before_time' | null
+          }[]
+        | null
+    )?.[0]
+    setHome(
+      place
+        ? {
+            method: place.method,
+            address: place.address,
+            hiddenUntil: place.address_hidden_until,
+            hiddenReason: place.address_hidden_reason,
+          }
+        : null,
+    )
   }, [id])
 
   // Load, then keep up with the other person's changes.
@@ -818,12 +841,22 @@ function HomeCard({
           </p>
         ) : (
           <p className="text-slate-500">
-            {home?.hiddenUntil
-              ? 'The address appears here once the 5-minute undo window has passed.'
-              : 'No address on file. Ask in the chat below.'}
+            {home?.hiddenReason === 'no_time'
+              ? 'For safety, the address appears here 2 hours before the time you agree on.'
+              : home?.hiddenReason === 'before_time' && home.hiddenUntil
+                ? `For safety, the address appears here at ${new Date(home.hiddenUntil).toLocaleString('en-CA', {
+                    weekday: 'short',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  })} (2 hours before). Reload the page then.`
+                : 'No address on file. Ask in the chat below.'}
           </p>
         )}
-        {yours && <p className="text-xs text-slate-500 mt-0.5">Only {other} can see this address, and only while the order is open.</p>}
+        {yours && (
+          <p className="text-xs text-slate-500 mt-0.5">
+            Only {other} can see this address, from 2 hours before the agreed time and only while the order is open.
+          </p>
+        )}
       </div>
     </div>
   )
@@ -896,6 +929,8 @@ function CancelOrder({
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // Cancellations left before buying/bidding (or listing) is paused.
+  const [left, setLeft] = useState<number | null>(null)
   // A no-show can only be reported once the agreed time has passed; it gives
   // the other person a strike (unless they tapped "I'm here").
   const meetupPassed = !!order.meetup_at && now !== null && now >= new Date(order.meetup_at).getTime()
@@ -919,6 +954,9 @@ function CancelOrder({
         onClick={() => {
           setError('')
           setOpen(true)
+          createClient()
+            .rpc('my_cancellations_left', { p_as: role })
+            .then(({ data }) => setLeft(typeof data === 'number' ? data : null))
         }}
         className="text-sm font-semibold text-slate-500 hover:text-red-600 underline"
       >
@@ -946,6 +984,13 @@ function CancelOrder({
                 ? 'The item is offered to the next-highest bidder, if there is one.'
                 : 'The auction ends without a sale, and you can relist it.'}
           </p>
+          {left !== null && !reason.endsWith('_no_show') && (
+            <p className={left <= 1 ? 'text-red-700 font-semibold' : 'text-slate-500'}>
+              {left <= 1
+                ? `This is your third cancellation in 30 days, so ${role === 'buyer' ? 'buying and bidding' : 'new listings'} will be paused for a while.`
+                : `Cancelling 3 orders in 30 days pauses ${role === 'buyer' ? 'buying and bidding' : 'new listings'} for a while. Reporting a no-show doesn't count.`}
+            </p>
+          )}
           <label className="block">
             <span className="font-semibold text-slate-700">Reason</span>
             <select value={reason} onChange={(e) => setReason(e.target.value)} className="mt-1 w-full border px-3 py-2 rounded-lg">

@@ -63,7 +63,11 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `notify_admins` | kind, title, body, listing_id, transaction_id, dedupe_key | void | (none) | definer | Notifies (and emails) every admin; used inside the functions above. |
 | `get_handoff_code` | transaction_id | text | auth, service | definer | The buyer's handoff code. |
 | `check_handoff_code` | transaction_id, seller_id, code | boolean | service | definer | Verifies the code the seller enters. |
-| `order_handoff_place` | transaction_id | table | auth, service | definer | Handoff method and address (address hidden until the hold goes through). |
+| `order_handoff_place` | transaction_id | table (method, address, address_hidden_until, address_hidden_reason) | auth, service | definer | Handoff method and home address. The address owner always sees it; the other person only from 2 hours before the agreed time (reason no_time / before_time otherwise). |
+| `recent_cancellations` | user_id, as (buyer / seller) | table (n, oldest) | service | definer | Orders the person cancelled in the last 30 days (not no-show reports, not the Buy Now undo). 3 pauses buying and bidding, or new listings. |
+| `my_cancellations_left` | as (buyer / seller) | integer | auth, service | definer | How many more the signed-in member can cancel before the pause (cancel dialog warning). |
+| `record_card_fingerprint` | user_id, fingerprint | void | service | definer | Records a saved card's Stripe fingerprint (live keys only, or CARD_FINGERPRINT_CHECK=on); tells admins when it's on another account too. |
+| `shares_card` | a, b | boolean | (none) | definer | Have these two accounts ever saved the same card (used by enforce_strike_limit). |
 | `order_party_names` | transaction_id | table | auth, service | definer | Buyer and seller usernames for an order. |
 | `suggest_meetup_spots` | transaction_id, limit | table | auth, service | definer | Public meetup spots between both parties. |
 | `propose_meetup` | transaction_id, spot_id, times[], note | void | auth, service | definer | Propose a spot and times (no spot for home handoffs). |
@@ -157,6 +161,7 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `admin_unsuspend_user` | user_id | void | auth, service | Lift a suspension; they are emailed. The app lifts the sign-in ban. |
 | `admin_take_down_listing` | listing_id, reason | void | auth, service | Hide a listing (rejected, inactive); the seller is told why. Open orders carry on. |
 | `admin_restore_listing` | listing_id | void | auth, service | Undo a take-down; Set Price goes back up, an auction only if it hasn't ended. Seller is told. |
+| `admin_shared_cards` | | table | auth, service | Groups of accounts that have saved the same card (short card key, name, email, suspended). |
 | `admin_payment_orders` | transaction_id (optional) | table | auth, service | Orders whose money needs a look (chargebacks, fraud warnings, payouts held or failing, refunds), or one order by number. Includes Stripe ids for refunds. |
 | `admin_set_payout_hold` | transaction_id, hold | void | auth, service | Hold an unsent payout, or release one whatever the reason. |
 | `admin_payout_rules` | | table | auth, service | The new-seller payout delay rules (members can't read them). |
@@ -189,5 +194,5 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `enforce_no_block_bid`, `enforce_no_block_purchase`, `enforce_no_block_question` | bids, transactions, listing_questions | Reject activity between blocked members. |
 | `on_transaction_authorized`, `on_transaction_notify`, `on_transaction_safety_alert` | transactions | Status notices and emergency-contact alerts. |
 | `on_order_message` | order_messages | Message notices. |
-| `on_no_show_reported`, `enforce_strike_limit` | no-shows, strikes | Strikes and suspension limits. |
+| `on_no_show_reported`, `enforce_strike_limit` | no-shows; bids, listings and Set Price orders | Strikes. Before a bid, listing or purchase: blocks suspended members, 3 strikes, 3 cancellations in 30 days, and buying from or bidding on an account that shared your card. |
 | `on_review`, `on_listing_review`, `on_order_completed_review_request` | reviews, transactions | Rating totals and review requests. |

@@ -10,6 +10,7 @@ import { TesterFeedback } from '@/components/admin/TesterFeedback'
 import { AdminListings } from '@/components/admin/AdminListings'
 import { AdminUsers } from '@/components/admin/AdminUsers'
 import { AdminPayments } from '@/components/admin/AdminPayments'
+import { AdminSharedCards } from '@/components/admin/AdminSharedCards'
 import { CheckCircle2, Flag, ShieldAlert, XCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCents } from '@/lib/money'
@@ -82,6 +83,7 @@ export default function AdminPage() {
             <ReviewQueue items={queue} onDone={load} />
             <AdminListings />
             <AdminUsers />
+            <AdminSharedCards />
             <CharityQueue items={charities} onDone={load} />
             {feeCap !== null && <FeeCapSetting cents={feeCap} onDone={load} />}
             <Strikes rows={strikes} onDone={load} />

@@ -211,6 +211,21 @@ export async function completeSetupIntent(setupIntentId: string): Promise<Result
       .eq('id', user.id)
     if (error) throw error
 
+    // Stripe gives the same card the same fingerprint on every account. We
+    // keep it (never shown to members) so two accounts using one card can't
+    // buy from or bid on each other, and admins are told. Live cards only:
+    // in test mode every tester's 4242 card would match, blocking them all
+    // from each other (CARD_FINGERPRINT_CHECK=on turns it on to try it).
+    const checkCards =
+      process.env.STRIPE_SECRET_KEY?.startsWith('sk_live') || process.env.CARD_FINGERPRINT_CHECK === 'on'
+    if (checkCards && pm.card?.fingerprint) {
+      const { error: fpError } = await admin.rpc('record_card_fingerprint', {
+        p_user_id: user.id,
+        p_fingerprint: pm.card.fingerprint,
+      })
+      if (fpError) console.error('record_card_fingerprint failed', user.id, fpError)
+    }
+
     // Replacing a card: remove the old one from the customer.
     const old = profile.stripe_payment_method_id
     if (old && old !== pm.id) {

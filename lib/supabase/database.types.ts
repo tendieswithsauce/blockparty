@@ -954,6 +954,19 @@ export type Database = {
         }[]
       }
       admin_set_payout_hold: { Args: { p_transaction_id: number; p_hold: boolean }; Returns: undefined }
+      admin_shared_cards: {
+        Args: never
+        Returns: {
+          card_key: string
+          user_id: string
+          username: string | null
+          email: string | null
+          suspended: boolean
+          first_seen: string
+        }[]
+      }
+      my_cancellations_left: { Args: { p_as: 'buyer' | 'seller' }; Returns: number }
+      record_card_fingerprint: { Args: { p_user_id: string; p_fingerprint: string }; Returns: undefined }
       admin_payout_rules: {
         Args: never
         Returns: {
@@ -1373,7 +1386,12 @@ export type Database = {
       }
       order_handoff_place: {
         Args: { p_transaction_id: number }
-        Returns: { address: string | null; address_hidden_until: string | null; method: HandoffMethod }[]
+        Returns: {
+          address: string | null
+          address_hidden_until: string | null
+          address_hidden_reason: 'no_time' | 'before_time' | null
+          method: HandoffMethod
+        }[]
       }
       record_handoff_location: {
         Args: { p_accuracy_m?: number | null; p_lat: number; p_lng: number; p_transaction_id: number }
