@@ -25,6 +25,7 @@ export class NoSavedCardError extends Error {
  * Places the hold and records the PaymentIntent on the transaction.
  * offSession: the buyer isn't on the page (auction win), so the bank can't
  * ask them for 3D Secure; Stripe fails with authentication_required instead.
+ * On the page (Buy Now), 3D Secure is always requested.
  * Throws Stripe errors (e.g. StripeCardError for declines).
  */
 export async function createHold(txn: HoldTxn, { offSession }: { offSession: boolean }): Promise<Stripe.PaymentIntent> {
@@ -44,7 +45,14 @@ export async function createHold(txn: HoldTxn, { offSession }: { offSession: boo
       automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
       capture_method: 'manual',
       confirm: true,
-      ...(offSession ? { off_session: true } : {}),
+      // Buy Now (buyer on the page): ask the bank to confirm the cardholder
+      // (3D Secure). Most Canadian banks do it silently; some show a check.
+      // When it's done, a "that wasn't me" chargeback is the bank's loss,
+      // not ours. Auction wins are charged with the buyer away, so they
+      // can't have it.
+      ...(offSession
+        ? { off_session: true }
+        : { payment_method_options: { card: { request_three_d_secure: 'any' as const } } }),
       description: `Blockparty order #${txn.id}: ${listing?.title ?? 'item'}`,
       transfer_group: `txn_${txn.id}`,
       metadata: {

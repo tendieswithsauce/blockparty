@@ -52,6 +52,11 @@ type Order = {
   canceled_by: string | null
   handoff_method: HandoffMethod
   delivery_fee_cents: number
+  payout_due_at: string | null
+  paid_out_at: string | null
+  payout_on_hold: boolean
+  refunded_cents: number
+  refunded_at: string | null
   listing: {
     id: number
     title: string
@@ -69,12 +74,32 @@ type Suggestion = Spot & { buyer_km: number; seller_km: number }
 type HomePlace = { method: HandoffMethod; address: string | null; hiddenUntil: string | null }
 
 const ORDER_COLUMNS =
-  'id, buyer_id, seller_id, amount_cents, platform_fee_cents, status, authorized_at, proposed_times, proposed_by, proposal_note, meetup_at, meetup_deadline, picked_up_at, cancel_reason, canceled_by, handoff_method, delivery_fee_cents, listing:listings(id, title, image_paths, listing_type, status, area:areas(name, city, timezone)), spot:meetup_spots(id, name, address, kind, lat, lng, timezone, notes)'
+  'id, buyer_id, seller_id, amount_cents, platform_fee_cents, status, authorized_at, proposed_times, proposed_by, proposal_note, meetup_at, meetup_deadline, picked_up_at, cancel_reason, canceled_by, handoff_method, delivery_fee_cents, payout_due_at, paid_out_at, payout_on_hold, refunded_cents, refunded_at, listing:listings(id, title, image_paths, listing_type, status, area:areas(name, city, timezone)), spot:meetup_spots(id, name, address, kind, lat, lng, timezone, notes)'
 
 const card = 'bg-white border rounded-2xl p-6 shadow-sm space-y-4'
 const primaryBtn = 'px-5 py-2.5 rounded-full bg-[#F26B5B] text-white font-bold hover:bg-[#e05a4a] disabled:opacity-60'
 const secondaryBtn =
   'px-5 py-2.5 rounded-full border-2 border-[#0E4D5C] text-[#0E4D5C] font-semibold hover:bg-[#0E4D5C]/5 disabled:opacity-60'
+
+/** "November 29" in the order's time zone (or the browser's). */
+function shortDate(iso: string, timeZone?: string) {
+  return new Date(iso).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', timeZone })
+}
+
+/** The seller's line on a completed order: paid, scheduled, held or processing. */
+function payoutMessage(order: Order, payoutCents: number, tz: string, now: number | null) {
+  const share = Math.max(payoutCents - order.refunded_cents, 0)
+  if (order.paid_out_at) return `${formatCents(share)} was sent to your bank through Stripe on ${shortDate(order.paid_out_at, tz)}.`
+  if (order.payout_on_hold) {
+    return share > 0
+      ? "Your payout is on hold while we look into a question about this payment. We'll let you know when it's sorted out."
+      : 'The buyer was refunded, so no payout will be sent for this sale.'
+  }
+  if (order.payout_due_at && new Date(order.payout_due_at).getTime() > (now ?? 0)) {
+    return `We'll send your ${formatCents(share)} payout on ${shortDate(order.payout_due_at, tz)}. A new seller's first sales are paid a few days after the handoff, to protect everyone from stolen cards.`
+  }
+  return `Your ${formatCents(share)} payout is being processed.`
+}
 
 /** datetime-local value (browser local time) for a Date. */
 function toLocalInput(d: Date) {
@@ -200,8 +225,14 @@ export function OrderView({ id }: { id: number }) {
           <p className="text-sm text-green-800">
             {role === 'buyer'
               ? `Your card was charged ${formatCents(order.amount_cents)}. Enjoy it!`
-              : `${formatCents(payoutCents)} is on its way to your bank through Stripe.`}
+              : payoutMessage(order, payoutCents, tz, now)}
           </p>
+          {order.refunded_cents > 0 && (
+            <p className="text-sm text-green-800">
+              {formatCents(order.refunded_cents)} {role === 'buyer' ? 'was refunded to your card' : 'was refunded to the buyer'}
+              {order.refunded_at && <> on {shortDate(order.refunded_at, tz)}</>}.
+            </p>
+          )}
         </div>
       ) : null}
 
@@ -680,9 +711,11 @@ function HandoffForm({
     setSaving(false)
     if (!result.ok) return setError(result.error)
     setDone(
-      result.payoutPending
-        ? 'Sale complete! Your payout is being processed.'
-        : `Sale complete! ${formatCents(result.payoutCents)} is on its way to your bank.`,
+      result.payoutDueAt
+        ? `Sale complete! We'll send your ${formatCents(result.payoutCents)} payout on ${shortDate(result.payoutDueAt)}. A new seller's first sales are paid a few days after the handoff, to protect everyone from stolen cards.`
+        : result.payoutPending
+          ? 'Sale complete! Your payout is being processed.'
+          : `Sale complete! ${formatCents(result.payoutCents)} is on its way to your bank.`,
     )
     onDone()
   }
@@ -696,7 +729,7 @@ function HandoffForm({
       </p>
       <p className="text-sm text-slate-600">
         Once {buyerName} has checked the item, ask for their 6-digit code and enter it here. We&apos;ll charge their card and
-        send you {formatCents(payoutCents)}.
+        send you {formatCents(payoutCents)}. Never hand the item over before the code goes through.
       </p>
       <input
         inputMode="numeric"

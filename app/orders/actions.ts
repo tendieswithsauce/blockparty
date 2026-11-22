@@ -16,12 +16,13 @@ type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string }
 
 /**
  * The seller enters the buyer's handoff code at the meetup. On a match the
- * buyer's card is charged and the seller is paid (price minus the fee).
+ * buyer's card is charged and the seller is paid (price minus the fee),
+ * straight away or, for a new seller, a few days later (payoutDueAt).
  */
 export async function completeHandoff(
   transactionId: number,
   code: string,
-): Promise<Result<{ payoutCents: number; payoutPending: boolean }>> {
+): Promise<Result<{ payoutCents: number; payoutPending: boolean; payoutDueAt: string | null }>> {
   if (!stripeConfigured()) return { ok: false, error: 'Payments are not set up yet.' }
   const user = await getCurrentUser()
   if (!user) return { ok: false, error: 'Please sign in.' }
@@ -62,13 +63,19 @@ export async function completeHandoff(
     return { ok: false, error: "We couldn't charge the buyer's card. Don't hand over the item yet; try again in a moment." }
   }
 
-  // 2. Pay the seller. The buyer has paid either way, so if this fails the
-  //    sale still completes and the cron route retries the payout
-  //    (lib/payments/payouts.ts, same idempotency key: never paid twice).
-  const transferId = await payoutSeller(txn, chargeId)
+  // 2. The sale is complete. The database says when the seller is paid: now,
+  //    or some days from now for a new seller (the cron pays it then).
+  const { data: payoutDueAt, error: completeError } = await admin.rpc('complete_order', { p_transaction_id: txn.id })
+  if (completeError) console.error('completeHandoff: complete_order failed', txn.id, completeError)
+  const due = payoutDueAt ? new Date(payoutDueAt) : null
+  if (due && due.getTime() > Date.now() + 60_000) {
+    return { ok: true, payoutCents, payoutPending: false, payoutDueAt: due.toISOString() }
+  }
 
-  await admin.rpc('complete_order', { p_transaction_id: txn.id, p_transfer_id: transferId })
-  return { ok: true, payoutCents, payoutPending: transferId === null }
+  // 3. Pay the seller now. The buyer has paid either way, so if this fails
+  //    the cron route retries it (same idempotency key: never paid twice).
+  const transferId = due ? await payoutSeller({ ...txn, payout_cents: payoutCents }, chargeId) : null
+  return { ok: true, payoutCents, payoutPending: transferId === null, payoutDueAt: null }
 }
 
 /**

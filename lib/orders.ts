@@ -20,6 +20,7 @@ const ALL_REASONS: Record<string, string> = {
   ...CANCEL_REASONS.buyer,
   ...CANCEL_REASONS.seller,
   no_meetup: "The meetup didn't happen before the deadline",
+  payment_flagged: "The card's bank flagged the payment",
 }
 
 export function cancelReasonLabel(reason: string | null) {

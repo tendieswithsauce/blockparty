@@ -1,6 +1,6 @@
 // app/admin/page.tsx
-// Admin area: revenue at a glance, listings held by the automatic check, and
-// member reports, all listings (take down / restore / delete), members (suspend),
+// Admin area: revenue at a glance, listings held by the automatic check,
+// member reports, payments (chargebacks, fraud warnings, refunds, payout holds), all listings (take down / restore / delete), members (suspend),
 // no-show strikes, charity applications and handoff locations. Every call is checked server-side with is_admin().
 'use client'
 
@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { TesterFeedback } from '@/components/admin/TesterFeedback'
 import { AdminListings } from '@/components/admin/AdminListings'
 import { AdminUsers } from '@/components/admin/AdminUsers'
+import { AdminPayments } from '@/components/admin/AdminPayments'
 import { CheckCircle2, Flag, ShieldAlert, XCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCents } from '@/lib/money'
@@ -76,6 +77,7 @@ export default function AdminPage() {
             <h1 className="text-3xl font-extrabold text-[#0E4D5C]">Admin</h1>
             {overview && <OverviewCards o={overview} />}
             <Reports rows={reports} onDone={load} />
+            <AdminPayments />
             <TesterFeedback />
             <ReviewQueue items={queue} onDone={load} />
             <AdminListings />

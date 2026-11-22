@@ -183,8 +183,10 @@ export default function TermsPage() {
               </li>
               <li>
                 After a completed handoff, the seller&apos;s share is sent to their Stripe account and paid out to their bank
-                on Stripe&apos;s schedule. We may hold or reverse a payout to deal with fraud, a chargeback or a breach of
-                these terms.
+                on Stripe&apos;s schedule. For a new seller&apos;s first sales, we send it a few days after the handoff
+                (the order page shows the date). We may hold or reverse a payout to deal with fraud, a chargeback, a refund
+                or a breach of these terms, and if a buyer is refunded before the payout, the seller&apos;s share is reduced
+                by the refund.
               </li>
               <li>
                 Payments are processed by Stripe and are subject to Stripe&apos;s terms. You&apos;re responsible for any taxes

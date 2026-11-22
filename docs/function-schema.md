@@ -51,7 +51,16 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `mark_relisted` | old_id, new_id | void | auth, service | definer | Sets listings.relisted_as on the old auction (only from relist_auction). |
 | `release_stale_purchases` | | table | service | definer | Finds stale pending purchases to release. |
 | `expired_orders` | | setof bigint | service | definer | Orders past their handoff deadline. |
-| `complete_order` | transaction_id, transfer_id | void | service | definer | Marks an order complete after payout. |
+| `complete_order` | transaction_id | timestamptz | service | definer | Marks an order complete after the card is charged and returns when the seller is to be paid (now, or later for a new seller). Same date if called again. |
+| `complete_order` | transaction_id, transfer_id | void | service | definer | Old version, kept for the live site's older code until beta (completes and records an immediate payout). |
+| `seller_payout_delay` | seller_id | interval | service | definer | How long after the handoff a seller is paid: the new-seller delay until they have enough clean sales and account age (marketplace_settings), then the normal delay. |
+| `payouts_due` | limit | table | service | definer | Completed orders whose payout is due: not sent, not on hold, seller not suspended, payout (price minus fee minus refunds) above zero. Used by the cron. |
+| `record_payout` | transaction_id, transfer_id, payout_cents | void | service | definer | Records a sent payout; tells the seller when a delayed payout goes out. |
+| `stripe_record_dispute` | payment_intent, dispute_id, status, reason, amount_cents | bigint | service | definer | Stripe webhook: a chargeback or inquiry opened, updated or closed. Holds an unpaid payout (released if won, kept if lost), tells admins and the seller. Ignores out-of-order updates. |
+| `stripe_record_fraud_warning` | payment_intent, fraud_type | table (transaction_id, canceled) | service | definer | Stripe webhook: early fraud warning. Cancels an order not yet handed over (reason payment_flagged; the app releases the hold), otherwise holds an unpaid payout. Tells admins. |
+| `record_refund` | payment_intent, refunded_cents (running total), note | bigint | service | definer | A refund (admin page or Stripe dashboard). Before the payout the seller's share shrinks; fully refunded means no payout. Tells the buyer, and the seller if unpaid. Safe to repeat. |
+| `record_transfer_reversal` | transaction_id, reversed_cents (running total), note | void | service | definer | Part of a sent payout was taken back; tells the seller why. |
+| `notify_admins` | kind, title, body, listing_id, transaction_id, dedupe_key | void | (none) | definer | Notifies (and emails) every admin; used inside the functions above. |
 | `get_handoff_code` | transaction_id | text | auth, service | definer | The buyer's handoff code. |
 | `check_handoff_code` | transaction_id, seller_id, code | boolean | service | definer | Verifies the code the seller enters. |
 | `order_handoff_place` | transaction_id | table | auth, service | definer | Handoff method and address (address hidden until the hold goes through). |
@@ -123,7 +132,7 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `notifications_sweep` | | void | service | definer | Scheduled sweep for time-based notices. |
 | `claim_notification_emails` | limit | table | service | definer | Queue of emails to send. |
 | `claim_safety_alerts` | limit | table | service | definer | Queue of emergency-contact emails. |
-| `auction_work_pending` | | boolean | service | definer | True when the cron has work (auctions, holds, emails, moderation, payout retries); gates the pg_cron job. |
+| `auction_work_pending` | | boolean | service | definer | True when the cron has work (auctions, holds, emails, moderation, payouts that are due or failed); gates the pg_cron job. |
 
 ## Admin (all check `is_admin()` inside)
 
@@ -148,6 +157,10 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `admin_unsuspend_user` | user_id | void | auth, service | Lift a suspension; they are emailed. The app lifts the sign-in ban. |
 | `admin_take_down_listing` | listing_id, reason | void | auth, service | Hide a listing (rejected, inactive); the seller is told why. Open orders carry on. |
 | `admin_restore_listing` | listing_id | void | auth, service | Undo a take-down; Set Price goes back up, an auction only if it hasn't ended. Seller is told. |
+| `admin_payment_orders` | transaction_id (optional) | table | auth, service | Orders whose money needs a look (chargebacks, fraud warnings, payouts held or failing, refunds), or one order by number. Includes Stripe ids for refunds. |
+| `admin_set_payout_hold` | transaction_id, hold | void | auth, service | Hold an unsent payout, or release one whatever the reason. |
+| `admin_payout_rules` | | table | auth, service | The new-seller payout delay rules (members can't read them). |
+| `admin_set_payout_rules` | new_seller_sales, new_seller_days, new_seller_payout_delay_days, payout_delay_days | void | auth, service | Change those rules; applies to sales completed afterwards. |
 | `admin_delete_listing` | listing_id, reason | text[] | auth, service | Delete a listing that never had an order; returns photo paths no other listing uses (app/admin/actions.ts removes them). |
 
 ## Formatting helpers

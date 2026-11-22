@@ -33,19 +33,35 @@ type TransactionRow = {
   meetup_at: string | null
   meetup_deadline: string | null
   meetup_spot_id: string | null
+  paid_out_at: string | null
   payout_attempts: number
+  payout_cents: number | null
+  payout_due_at: string | null
+  payout_hold_reason: PayoutHoldReason | null
+  payout_on_hold: boolean
   picked_up_at: string | null
   platform_fee_cents: number
   proposal_note: string | null
   proposed_by: string | null
   proposed_times: string[] | null
+  refund_note: string | null
+  refunded_at: string | null
+  refunded_cents: number
   seller_id: string
   status: Database["public"]["Enums"]["transaction_status"]
   stripe_checkout_session_id: string | null
+  stripe_dispute_id: string | null
   stripe_payment_intent_id: string | null
   stripe_transfer_id: string | null
+  dispute_reason: string | null
+  dispute_status: string | null
+  disputed_at: string | null
+  fraud_warning_at: string | null
+  transfer_reversed_cents: number
   updated_at: string
 }
+
+export type PayoutHoldReason = 'dispute' | 'dispute_lost' | 'fraud_warning' | 'refunded' | 'admin'
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
@@ -361,6 +377,10 @@ export type Database = {
           charity_fee_free_cap_cents: number
           email_site_url: string | null
           id: boolean
+          new_seller_days: number
+          new_seller_payout_delay_days: number
+          new_seller_sales: number
+          payout_delay_days: number
         }
         Insert: {
           charity_fee_free_cap_cents?: number
@@ -729,6 +749,12 @@ export type Database = {
           },
         ]
       }
+      stripe_events: {
+        Row: { id: string; received_at: string; transaction_id: number | null; type: string }
+        Insert: { id: string; received_at?: string; transaction_id?: number | null; type: string }
+        Update: { transaction_id?: number | null }
+        Relationships: []
+      }
       username_blocked_terms: {
         Row: { term: string }
         Insert: { term: string }
@@ -895,6 +921,94 @@ export type Database = {
         Returns: undefined
       }
       admin_set_charity_fee_cap: { Args: { p_cents: number }; Returns: undefined }
+      admin_payment_orders: {
+        Args: { p_transaction_id?: number | null }
+        Returns: {
+          id: number
+          listing_id: number
+          title: string
+          buyer_id: string
+          buyer_name: string | null
+          buyer_suspended: boolean
+          seller_id: string
+          seller_name: string | null
+          seller_suspended: boolean
+          status: string
+          amount_cents: number
+          platform_fee_cents: number
+          picked_up_at: string | null
+          payout_due_at: string | null
+          paid_out_at: string | null
+          payout_cents: number | null
+          payout_hold_reason: PayoutHoldReason | null
+          payout_attempts: number
+          refunded_cents: number
+          refund_note: string | null
+          transfer_reversed_cents: number
+          dispute_status: string | null
+          dispute_reason: string | null
+          disputed_at: string | null
+          fraud_warning_at: string | null
+          stripe_payment_intent_id: string | null
+          stripe_transfer_id: string | null
+        }[]
+      }
+      admin_set_payout_hold: { Args: { p_transaction_id: number; p_hold: boolean }; Returns: undefined }
+      admin_payout_rules: {
+        Args: never
+        Returns: {
+          new_seller_sales: number
+          new_seller_days: number
+          new_seller_payout_delay_days: number
+          payout_delay_days: number
+        }[]
+      }
+      admin_set_payout_rules: {
+        Args: {
+          p_new_seller_sales: number
+          p_new_seller_days: number
+          p_new_seller_payout_delay_days: number
+          p_payout_delay_days: number
+        }
+        Returns: undefined
+      }
+      payouts_due: {
+        Args: { p_limit?: number }
+        Returns: {
+          id: number
+          listing_id: number
+          seller_id: string
+          payout_cents: number
+          stripe_payment_intent_id: string
+          payout_attempts: number
+        }[]
+      }
+      record_payout: {
+        Args: { p_transaction_id: number; p_transfer_id: string | null; p_payout_cents: number }
+        Returns: undefined
+      }
+      stripe_record_dispute: {
+        Args: {
+          p_payment_intent: string
+          p_dispute_id: string
+          p_status: string
+          p_reason: string | null
+          p_amount_cents: number
+        }
+        Returns: number | null
+      }
+      stripe_record_fraud_warning: {
+        Args: { p_payment_intent: string; p_fraud_type: string | null }
+        Returns: { transaction_id: number; canceled: boolean }[]
+      }
+      record_refund: {
+        Args: { p_payment_intent: string; p_refunded_cents: number; p_note?: string | null }
+        Returns: number | null
+      }
+      record_transfer_reversal: {
+        Args: { p_transaction_id: number; p_reversed_cents: number; p_note: string | null }
+        Returns: undefined
+      }
       apply_charity: {
         Args: {
           p_bn: string
@@ -977,10 +1091,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      complete_order: {
-        Args: { p_transaction_id: number; p_transfer_id: string | null }
-        Returns: undefined
-      }
+      complete_order:
+        | {
+            Args: { p_transaction_id: number }
+            Returns: string | null
+          }
+        | {
+            // Older code on the live site only; see 20261122000000.
+            Args: { p_transaction_id: number; p_transfer_id: string | null }
+            Returns: undefined
+          }
       convert_to_auction: {
         Args: {
           p_duration_days: number
