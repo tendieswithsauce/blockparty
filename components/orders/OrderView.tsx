@@ -22,6 +22,7 @@ import { OrderReview } from '@/components/orders/OrderReview'
 import { SafetyMenu } from '@/components/SafetyMenu'
 import { cancelOrder, completeHandoff } from '@/app/orders/actions'
 import { SecuredByStripe } from '@/components/StripeBadge'
+import { ConfirmWin } from '@/components/orders/ConfirmWin'
 
 type Spot = {
   id: string
@@ -49,7 +50,10 @@ type Order = {
   meetup_deadline: string | null
   picked_up_at: string | null
   cancel_reason: string | null
+  cancel_note: string | null
   canceled_by: string | null
+  confirm_by: string | null
+  offer_id: number | null
   handoff_method: HandoffMethod
   delivery_fee_cents: number
   payout_due_at: string | null
@@ -79,7 +83,7 @@ type HomePlace = {
 }
 
 const ORDER_COLUMNS =
-  'id, buyer_id, seller_id, amount_cents, platform_fee_cents, status, authorized_at, proposed_times, proposed_by, proposal_note, meetup_at, meetup_deadline, picked_up_at, cancel_reason, canceled_by, handoff_method, delivery_fee_cents, payout_due_at, paid_out_at, payout_on_hold, refunded_cents, refunded_at, listing:listings(id, title, image_paths, listing_type, status, area:areas(name, city, timezone)), spot:meetup_spots(id, name, address, kind, lat, lng, timezone, notes)'
+  'id, buyer_id, seller_id, amount_cents, platform_fee_cents, status, authorized_at, proposed_times, proposed_by, proposal_note, meetup_at, meetup_deadline, picked_up_at, cancel_reason, cancel_note, canceled_by, confirm_by, offer_id, handoff_method, delivery_fee_cents, payout_due_at, paid_out_at, payout_on_hold, refunded_cents, refunded_at, listing:listings(id, title, image_paths, listing_type, status, area:areas(name, city, timezone)), spot:meetup_spots(id, name, address, kind, lat, lng, timezone, notes)'
 
 const card = 'bg-white border rounded-2xl p-6 shadow-sm space-y-4'
 const primaryBtn = 'px-5 py-2.5 rounded-full bg-[#F26B5B] text-white font-bold hover:bg-[#e05a4a] disabled:opacity-60'
@@ -202,8 +206,9 @@ export function OrderView({ id }: { id: number }) {
     ? createClient().storage.from('listing-photos').getPublicUrl(order.listing.image_paths[0]).data.publicUrl
     : null
   const payoutCents = order.amount_cents - order.platform_fee_cents
+  // Accepted offers were agreed by both sides, so there's no undo window.
   const undoUntil =
-    order.listing?.listing_type === 'fixed' && order.authorized_at
+    order.listing?.listing_type === 'fixed' && !order.offer_id && order.authorized_at
       ? new Date(order.authorized_at).getTime() + BUY_NOW_CANCEL_WINDOW_SECONDS * 1000
       : null
   const inUndoWindow = undoUntil !== null && now !== null && now < undoUntil
@@ -270,8 +275,26 @@ export function OrderView({ id }: { id: number }) {
             {cancelReasonLabel(order.cancel_reason)}.{' '}
             {role === 'buyer' ? 'The hold on your card was released; you were not charged.' : 'The buyer was not charged.'}
           </p>
+          {order.cancel_note && (
+            <p className="text-sm text-slate-600 bg-slate-50 rounded-xl p-3">
+              {order.canceled_by === order.seller_id ? `${names.seller}` : `${names.buyer}`}&apos;s note: &ldquo;{order.cancel_note}&rdquo;
+            </p>
+          )}
           {role === 'seller' && order.listing && <AfterCancel listing={order.listing} onDone={load} />}
         </div>
+      ) : order.status === 'pending' && order.confirm_by ? (
+        <ConfirmWin
+          orderId={order.id}
+          role={role}
+          amountCents={order.amount_cents}
+          deliveryFeeCents={order.delivery_fee_cents}
+          method={order.handoff_method}
+          confirmBy={order.confirm_by}
+          tz={tz}
+          otherName={other}
+          now={now}
+          onDone={load}
+        />
       ) : order.status !== 'authorized' ? (
         <div className={card}>
           <p className="text-sm text-slate-600">This order is being set up. Check back in a minute.</p>
@@ -931,6 +954,9 @@ function CancelOrder({
   const [error, setError] = useState('')
   // Cancellations left before buying/bidding (or listing) is paused.
   const [left, setLeft] = useState<number | null>(null)
+  // Whether the seller's next "something came up" cancel is free (first in 90 days).
+  const [freeExtenuating, setFreeExtenuating] = useState<boolean | null>(null)
+  const [note, setNote] = useState('')
   // A no-show can only be reported once the agreed time has passed; it gives
   // the other person a strike (unless they tapped "I'm here").
   const meetupPassed = !!order.meetup_at && now !== null && now >= new Date(order.meetup_at).getTime()
@@ -940,8 +966,12 @@ function CancelOrder({
 
   async function confirm() {
     if (!reason) return setError('Choose a reason.')
+    if (reason === 'extenuating' && note.trim().length < 10) return setError('Tell the buyer what happened (a sentence is enough).')
     setBusy(true)
-    const result = await cancelOrder(order.id, reason).catch(() => ({ ok: false as const, error: 'Something went wrong.' }))
+    const result = await cancelOrder(order.id, reason, note.trim()).catch(() => ({
+      ok: false as const,
+      error: 'Something went wrong.',
+    }))
     setBusy(false)
     if (!result.ok) return setError(result.error)
     setOpen(false)
@@ -954,9 +984,13 @@ function CancelOrder({
         onClick={() => {
           setError('')
           setOpen(true)
-          createClient()
+          const supabase = createClient()
+          supabase
             .rpc('my_cancellations_left', { p_as: role })
             .then(({ data }) => setLeft(typeof data === 'number' ? data : null))
+          if (role === 'seller') {
+            supabase.rpc('my_free_extenuating').then(({ data }) => setFreeExtenuating(typeof data === 'boolean' ? data : null))
+          }
         }}
         className="text-sm font-semibold text-slate-500 hover:text-red-600 underline"
       >
@@ -984,7 +1018,7 @@ function CancelOrder({
                 ? 'The item is offered to the next-highest bidder, if there is one.'
                 : 'The auction ends without a sale, and you can relist it.'}
           </p>
-          {left !== null && !reason.endsWith('_no_show') && (
+          {left !== null && !reason.endsWith('_no_show') && !(reason === 'extenuating' && freeExtenuating) && (
             <p className={left <= 1 ? 'text-red-700 font-semibold' : 'text-slate-500'}>
               {left <= 1
                 ? `This is your third cancellation in 30 days, so ${role === 'buyer' ? 'buying and bidding' : 'new listings'} will be paused for a while.`
@@ -1004,6 +1038,27 @@ function CancelOrder({
               ))}
             </select>
           </label>
+          {reason === 'extenuating' && (
+            <>
+              <label className="block">
+                <span className="font-semibold text-slate-700">What happened?</span>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  maxLength={500}
+                  rows={3}
+                  placeholder="e.g. My car broke down, so I can't deliver it this week."
+                  className="mt-1 w-full border px-3 py-2 rounded-lg"
+                />
+              </label>
+              <p className="text-slate-500">
+                The buyer sees this, and so does the Blockparty team.{' '}
+                {freeExtenuating
+                  ? "Your first one in 90 days doesn't count toward the cancellation limit."
+                  : 'You used your free one in the last 90 days, so this counts toward the cancellation limit.'}
+              </p>
+            </>
+          )}
         </ConfirmDialog>
       )}
     </>

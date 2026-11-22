@@ -15,6 +15,8 @@ import { ManageListingCard } from '@/components/listing/ManageListingCard'
 import { BidPanel } from '@/components/listing/BidPanel'
 import { SilentBidPanel } from '@/components/listing/SilentBidPanel'
 import { BuyNowPanel } from '@/components/listing/BuyNowPanel'
+import { OfferPanel } from '@/components/listing/OfferPanel'
+import { OffersInbox } from '@/components/listing/OffersInbox'
 import { WatchButton } from '@/components/listing/WatchButton'
 import { RatingSummary } from '@/components/Stars'
 import { Avatar } from '@/components/Avatar'
@@ -56,7 +58,7 @@ async function ListingContent({ id }: { id: string }) {
   const { data: listing } = await supabase
     .from('listings')
     .select(
-      'id, seller_id, title, description, listing_type, status, condition, area:areas(name, city), category:categories!category_id(id, name, parent:parent_id(id, name)), image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, watch_count, silent, charity:charities(name, slug), offers_meetup, offers_pickup, delivery_fee_cents, delivery_km, extensions, converted_at, created_at',
+      'id, seller_id, title, description, listing_type, status, condition, area:areas(name, city), category:categories!category_id(id, name, parent:parent_id(id, name)), image_paths, buy_now_price_cents, starting_price_cents, current_bid_cents, bid_count, ends_at, has_reserve, reserve_met, watch_count, silent, charity:charities(name, slug), offers_meetup, offers_pickup, delivery_fee_cents, delivery_km, extensions, converted_at, created_at, accepts_offers',
     )
     .eq('id', listingId)
     .maybeSingle()
@@ -209,14 +211,40 @@ async function ListingContent({ id }: { id: string }) {
             }}
           />
         ) : (
-          <BuyNowPanel
+          <>
+            <BuyNowPanel
+              listing={{
+                id: listing.id,
+                title: listing.title,
+                sellerId: listing.seller_id,
+                status: listing.status,
+                priceCents: listing.buy_now_price_cents ?? 0,
+                acceptsOffers: listing.accepts_offers,
+                handoff,
+              }}
+            />
+            {listing.accepts_offers && (
+              <OfferPanel
+                listing={{
+                  id: listing.id,
+                  title: listing.title,
+                  sellerId: listing.seller_id,
+                  status: listing.status,
+                  priceCents: listing.buy_now_price_cents ?? 0,
+                  handoff,
+                }}
+              />
+            )}
+          </>
+        )}
+
+        {viewer?.id === listing.seller_id && listing.listing_type === 'fixed' && listing.status !== 'sold' && (
+          <OffersInbox
             listing={{
               id: listing.id,
               title: listing.title,
-              sellerId: listing.seller_id,
               status: listing.status,
               priceCents: listing.buy_now_price_cents ?? 0,
-              handoff,
             }}
           />
         )}

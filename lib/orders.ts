@@ -13,6 +13,7 @@ export const CANCEL_REASONS = {
     cant_meet: "We couldn't find a time to meet",
     too_far: 'The delivery address is too far for me',
     buyer_no_show: "The buyer didn't show up",
+    extenuating: 'Something came up (car trouble, the item got damaged…)',
   },
 } as const
 
@@ -21,6 +22,9 @@ const ALL_REASONS: Record<string, string> = {
   ...CANCEL_REASONS.seller,
   no_meetup: "The meetup didn't happen before the deadline",
   payment_flagged: "The card's bank flagged the payment",
+  extenuating: 'Something came up for the seller',
+  win_declined: 'The winning bidder passed',
+  win_not_confirmed: "The winning bidder didn't confirm in time",
 }
 
 export function cancelReasonLabel(reason: string | null) {

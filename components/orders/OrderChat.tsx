@@ -1,13 +1,15 @@
 // components/orders/OrderChat.tsx
 // Messages between buyer and seller on an open order, live over Realtime.
-// Around the meetup time it adds one-tap "I'm here" / "Running late".
+// Around the meetup time it adds one-tap "I'm here" / "Running late" and
+// "Share my location" (the other person sees it on a map; share_order_location).
 // Sending goes through send_order_message(), which also notifies the other
 // side and refuses the buyer's handoff code.
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { MapPinCheck, MessageCircle, Send, Timer } from 'lucide-react'
+import { LocateFixed, MapPin, MapPinCheck, MessageCircle, Send, Timer } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { mapsUrl } from '@/lib/orders'
 
 type Message = {
   id: number
@@ -15,6 +17,9 @@ type Message = {
   kind: string
   body: string
   created_at: string
+  lat: number | null
+  lng: number | null
+  accuracy_m: number | null
 }
 
 // Show the quick buttons from 2 hours before the meetup to 2 hours after.
@@ -41,6 +46,7 @@ export function OrderChat({
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const [locating, setLocating] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -48,7 +54,7 @@ export function OrderChat({
     let cancelled = false
     supabase
       .from('order_messages')
-      .select('id, sender_id, kind, body, created_at')
+      .select('id, sender_id, kind, body, created_at, lat, lng, accuracy_m')
       .eq('transaction_id', orderId)
       .order('created_at')
       .limit(200)
@@ -92,6 +98,37 @@ export function OrderChat({
     if (data) setMessages((prev) => (prev && !prev.some((x) => x.id === data.id) ? [...prev, data] : prev))
   }
 
+  /** One reading from the phone's GPS, sent into the chat for the other person. */
+  async function shareLocation() {
+    setError('')
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      return setError("This browser can't share your location.")
+    }
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { data, error: rpcError } = await createClient().rpc('share_order_location', {
+          p_transaction_id: orderId,
+          p_lat: pos.coords.latitude,
+          p_lng: pos.coords.longitude,
+          p_accuracy_m: Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null,
+        })
+        setLocating(false)
+        if (rpcError) return setError(rpcError.code === 'P0001' ? `${rpcError.message}.` : "Couldn't share your location. Try again.")
+        if (data) setMessages((prev) => (prev && !prev.some((x) => x.id === data.id) ? [...prev, data] : prev))
+      },
+      (err) => {
+        setLocating(false)
+        setError(
+          err.code === err.PERMISSION_DENIED
+            ? 'Location is turned off for this site. Allow it in your browser settings to share where you are.'
+            : "Couldn't find your location. Try again outside or near a window.",
+        )
+      },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
+    )
+  }
+
   const meetupMs = meetupAt ? new Date(meetupAt).getTime() : null
   const showQuick = meetupMs !== null && now !== null && Math.abs(now - meetupMs) <= QUICK_WINDOW_MS
 
@@ -114,7 +151,7 @@ export function OrderChat({
         ) : (
           messages.map((m) => {
             const mine = m.sender_id === userId
-            const quick = m.kind === 'here' || m.kind === 'late'
+            const quick = m.kind === 'here' || m.kind === 'late' || m.kind === 'location'
             return (
               <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                 <div
@@ -129,9 +166,26 @@ export function OrderChat({
                   <p className="whitespace-pre-line break-words">
                     {m.kind === 'here' && <MapPinCheck className="inline w-4 h-4 mr-1 -mt-0.5" />}
                     {m.kind === 'late' && <Timer className="inline w-4 h-4 mr-1 -mt-0.5" />}
+                    {m.kind === 'location' && <MapPin className="inline w-4 h-4 mr-1 -mt-0.5" />}
                     {quick && !mine ? `${other}: ` : ''}
-                    {m.body}
+                    {m.kind === 'location' ? (mine ? 'You shared your location' : 'Shared their location') : m.body}
                   </p>
+                  {m.kind === 'location' &&
+                    (m.lat !== null && m.lng !== null ? (
+                      <a
+                        href={mapsUrl(m.lat, m.lng)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-semibold text-[#0E4D5C] underline"
+                      >
+                        Open in Maps
+                        {m.accuracy_m !== null && m.accuracy_m > 0 && (
+                          <span className="font-normal no-underline text-slate-500"> (within {Math.round(m.accuracy_m)} m)</span>
+                        )}
+                      </a>
+                    ) : (
+                      <span className="text-xs text-slate-500">No longer available</span>
+                    ))}
                   <p className={`text-[11px] mt-0.5 ${mine && !quick ? 'text-white/70' : 'text-slate-500'}`}>{timeLabel(m.created_at)}</p>
                 </div>
               </div>
@@ -149,6 +203,14 @@ export function OrderChat({
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#0E4D5C] text-white text-sm font-semibold disabled:opacity-60"
           >
             <MapPinCheck className="w-4 h-4" /> I&apos;m here
+          </button>
+          <button
+            type="button"
+            disabled={locating}
+            onClick={shareLocation}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F26B5B] text-white text-sm font-semibold disabled:opacity-60"
+          >
+            <LocateFixed className="w-4 h-4" /> {locating ? 'Finding you…' : 'Share my location'}
           </button>
           {[5, 15].map((min) => (
             <button

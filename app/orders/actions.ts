@@ -79,12 +79,14 @@ export async function completeHandoff(
 }
 
 /**
- * Either party cancels before the handoff. The buyer's hold is released. If
+ * Either party cancels before the handoff. The buyer's hold is released.
+ * A seller cancelling because something came up ('extenuating') explains it
+ * in a note the buyer sees. If
  * the buyer backed out of an auction, cancel_order puts the listing back to
  * active and we offer it to the next-highest bidder straight away (the cron
  * route picks it up within a minute if this doesn't finish).
  */
-export async function cancelOrder(transactionId: number, reason: string): Promise<Result> {
+export async function cancelOrder(transactionId: number, reason: string, note?: string): Promise<Result> {
   const user = await getCurrentUser()
   if (!user) return { ok: false, error: 'Please sign in.' }
   if (!Object.hasOwn(CANCEL_REASONS.buyer, reason) && !Object.hasOwn(CANCEL_REASONS.seller, reason)) {
@@ -95,6 +97,7 @@ export async function cancelOrder(transactionId: number, reason: string): Promis
     p_transaction_id: transactionId,
     p_user_id: user.id,
     p_reason: reason,
+    p_note: reason === 'extenuating' ? (note ?? '').slice(0, 500) : undefined,
   })
   if (error) {
     return { ok: false, error: error.code === 'P0001' ? `${error.message}.` : 'Something went wrong. Please try again.' }

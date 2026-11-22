@@ -16,7 +16,15 @@ import { HandoffChoice, HandoffDeadlineNote } from '@/components/listing/Handoff
 import { type HandoffMethod, type HandoffOptions, availableMethods, handoffDeadline, methodTitle } from '@/lib/handoff'
 import { buyNow, cancelPurchase, confirmPurchase } from '@/app/purchases/actions'
 
-type ListingInfo = { id: number; title: string; sellerId: string; status: string; priceCents: number; handoff: HandoffOptions }
+type ListingInfo = {
+  id: number
+  title: string
+  sellerId: string
+  status: string
+  priceCents: number
+  acceptsOffers?: boolean
+  handoff: HandoffOptions
+}
 
 /** The viewer's purchase of this listing, and until when they can undo it. */
 type Purchase = { id: number; cancelUntil: number | null }
@@ -55,7 +63,7 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
         supabase.from('profiles').select('stripe_payment_method_id, home_address').eq('id', uid).single(),
         supabase
           .from('transactions')
-          .select('id, status, authorized_at')
+          .select('id, status, authorized_at, offer_id')
           .eq('listing_id', listing.id)
           .eq('buyer_id', uid)
           .in('status', ['authorized', 'dropped_off', 'completed'])
@@ -67,8 +75,11 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
       if (txn) {
         setPurchase({
           id: txn.id,
+          // An accepted offer was agreed by both sides: no undo.
           cancelUntil:
-            txn.status === 'authorized' && txn.authorized_at ? new Date(txn.authorized_at).getTime() + WINDOW_MS : null,
+            txn.status === 'authorized' && txn.authorized_at && !txn.offer_id
+              ? new Date(txn.authorized_at).getTime() + WINDOW_MS
+              : null,
         })
       }
       // Set last so the panel doesn't flash "sold" before we know it's theirs.
@@ -142,6 +153,11 @@ export function BuyNowPanel({ listing }: { listing: ListingInfo }) {
     <div className="bg-white border rounded-2xl p-6 shadow-sm space-y-4">
       <p className="text-sm text-slate-500">Price</p>
       <p className="text-4xl font-extrabold text-[#0E4D5C]">{price}</p>
+      {listing.status === 'active' && (
+        <p className="text-sm text-slate-500 -mt-2">
+          {listing.acceptsOffers ? 'Open to offers' : 'Firm price'}
+        </p>
+      )}
 
       {canceled && <div className="p-3 rounded-xl text-sm bg-slate-50 text-slate-700">Purchase cancelled. Your card hold has been released.</div>}
 

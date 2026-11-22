@@ -199,14 +199,16 @@ export default function DashboardPage() {
         .from('transactions')
         .select(ORDER_COLUMNS)
         .eq('buyer_id', user.id)
-        .in('status', ['authorized', 'completed', 'refunded'])
+        // Also auction wins still waiting for the winner to confirm and pay.
+        .or('status.in.(authorized,completed,refunded),and(status.eq.pending,confirm_by.not.is.null)')
         .order('created_at', { ascending: false })
         .limit(20),
       supabase
         .from('transactions')
         .select(ORDER_COLUMNS)
         .eq('seller_id', user.id)
-        .in('status', ['authorized', 'completed', 'refunded'])
+        // Also auction wins still waiting for the winner to confirm and pay.
+        .or('status.in.(authorized,completed,refunded),and(status.eq.pending,confirm_by.not.is.null)')
         .order('created_at', { ascending: false })
         .limit(20),
       supabase
@@ -878,6 +880,8 @@ function OrderRow({ order, role }: { order: MyOrder; role: 'buyer' | 'seller' })
   let next: { text: string; action: boolean }
   if (order.status === 'completed')
     next = order.needsReview ? { text: 'Leave a review', action: true } : { text: role === 'seller' ? 'Paid' : 'Done', action: false }
+  else if (order.status === 'pending')
+    next = role === 'buyer' ? { text: 'You won! Confirm and pay', action: true } : { text: 'Waiting for the winner', action: false }
   else if (order.status !== 'authorized') next = { text: STATUS_LABELS[order.status] ?? order.status, action: false }
   else if (order.meetup_at) next = { text: `Meetup ${formatMeetupTime(order.meetup_at, tz)}`, action: false }
   else if (order.proposed_times?.length) {

@@ -128,6 +128,14 @@ export default function TermsPage() {
                   the purchase is confirmed and the seller is told.
                 </li>
                 <li>
+                  <strong>Offers.</strong> If a seller is open to offers, you can offer less than the price. The offer amount
+                  is held on your card when you make it. If the seller accepts within 48 hours, you&apos;ve bought the item
+                  at your offer (there&apos;s no undo). The seller may instead offer to meet in the middle; if you accept that
+                  within 24 hours, you&apos;ve bought it at that price. If an offer is declined, withdrawn or expires, the
+                  hold is released. You can make up to 3 offers per item, one at a time. Sellers may have offers below an
+                  amount they choose declined automatically.
+                </li>
+                <li>
                   At the handoff, inspect the item. If it&apos;s as described, show the seller your handoff code. When the
                   seller enters it, your card is charged and the sale is complete.{' '}
                   <strong>Don&apos;t share your code until you&apos;re satisfied</strong>; once it&apos;s used, the sale is
@@ -152,16 +160,18 @@ export default function TermsPage() {
           body: (
             <ul>
               <li>
-                <strong>Bids are binding.</strong> If you win, you&apos;re committed to buy at your bid, and we&apos;ll place
-                a hold on your saved card when the auction ends.
+                <strong>Bids are binding.</strong> If you win, you&apos;re committed to buy at your bid. You have 24 hours
+                after the auction ends to confirm and pay, which places a hold on your saved card. If you don&apos;t, or you
+                pass, it counts as a cancellation.
               </li>
               <li>A bid placed in the last 2 minutes extends the auction by 2 minutes, so everyone has a fair chance to respond.</li>
               <li>If an auction has a reserve price and the reserve isn&apos;t met, there&apos;s no sale.</li>
               <li>
-                If the winning bidder&apos;s card can&apos;t be held, or they back out of the order, the item may go to the
-                next-highest bidder who met the reserve, at their bid. Your bid stays binding until the auction is settled.
+                If the winning bidder doesn&apos;t confirm in time, passes, or backs out of the order, the item may go to the
+                next-highest bidder who met the reserve, at their bid, with the same 24 hours to confirm. Your bid stays
+                binding until the auction is settled.
               </li>
-              <li>In charity silent auctions, bids are hidden; the highest bid wins.</li>
+              <li>Bidders&apos; usernames are shown with their bids. In charity silent auctions, bids are hidden; the highest bid wins.</li>
               <li>
                 Don&apos;t bid on your own items, ask others to, or otherwise manipulate an auction (&ldquo;shill
                 bidding&rdquo;).
@@ -219,6 +229,12 @@ export default function TermsPage() {
               <h3>Cancellations and no-shows</h3>
               <ul>
                 <li>Either party can cancel an order before the handoff; the buyer&apos;s hold is released.</li>
+                <li>
+                  Cancelling 3 orders in 30 days pauses buying and bidding (or, for sellers, new listings) for a while.
+                  Reporting a no-show doesn&apos;t count. A seller who cancels because something came up that they
+                  couldn&apos;t help (for example, the item was damaged or their car broke down) explains what happened to
+                  the buyer; their first such cancellation in 90 days doesn&apos;t count toward the limit.
+                </li>
                 <li>
                   If you&apos;re reported for not showing up to an agreed meetup, you may receive a no-show strike. Strikes
                   stay active for 90 days. With 3 active strikes, buying, bidding and selling are paused until one expires.

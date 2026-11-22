@@ -80,8 +80,8 @@ export function HandoffDeadlineNote({ deadline, auction }: { deadline: Date; auc
       <CalendarClock className="w-4 h-4 shrink-0 mt-0.5" />
       <p>
         <strong>Only {auction ? 'bid' : 'buy'} if you can get the item by {formatDeadline(deadline)}.</strong>{' '}
-        {auction ? 'If you win, you' : 'You'} and the seller have {HANDOFF_WINDOW_DAYS} days to do the handoff. After that the
-        order is cancelled and the hold on your card is released.
+        {auction ? 'If you win, you have 24 hours to confirm and pay; then you' : 'You'} and the seller have{' '}
+        {HANDOFF_WINDOW_DAYS} days to do the handoff. After that the order is cancelled and the hold on your card is released.
       </p>
     </div>
   )

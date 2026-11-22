@@ -44,6 +44,9 @@ export function CreateListingModal({
   const [durationDays, setDurationDays] = useState<number>(3)
   const [useReserve, setUseReserve] = useState(false)
   const [reserve, setReserve] = useState('')
+  // Set Price: firm, or open to offers (optionally declining offers below an amount).
+  const [acceptsOffers, setAcceptsOffers] = useState(false)
+  const [offerFloor, setOfferFloor] = useState('')
   const [areaId, setAreaId] = useState<string>(defaultArea ?? '')
   const [categoryId, setCategoryId] = useState('')
   const [condition, setCondition] = useState<ListingCondition | ''>('')
@@ -149,6 +152,18 @@ export function CreateListingModal({
         return
       }
     }
+    let offerFloorCents: number | null = null
+    if (listingType === 'fixed' && acceptsOffers && offerFloor.trim()) {
+      offerFloorCents = dollarsToCents(offerFloor)
+      if (offerFloorCents === null) {
+        setError('Enter a valid amount to decline offers below, or leave it empty.')
+        return
+      }
+      if (offerFloorCents >= priceCents) {
+        setError('The amount to decline offers below must be less than your price.')
+        return
+      }
+    }
     if (!categoryId) {
       setError('Choose a category so buyers can find your item.')
       return
@@ -222,6 +237,8 @@ export function CreateListingModal({
       p_offers_pickup: offersPickup,
       p_delivery_fee_cents: deliveryFeeCents,
       p_delivery_km: offersDelivery ? deliveryKm : null,
+      p_accepts_offers: listingType === 'fixed' && acceptsOffers,
+      p_offer_floor_cents: offerFloorCents,
     })
 
     if (insertError) {
@@ -418,6 +435,40 @@ export function CreateListingModal({
               </select>
             </div>
           </div>
+
+          {listingType === 'fixed' && (
+            <fieldset>
+              <legend className="block text-sm font-medium text-gray-700">Offers</legend>
+              <div className="mt-1 flex gap-4 text-sm">
+                <label className="inline-flex items-center gap-2">
+                  <input type="radio" name="offers" checked={!acceptsOffers} onChange={() => setAcceptsOffers(false)} />
+                  Firm price
+                </label>
+                <label className="inline-flex items-center gap-2">
+                  <input type="radio" name="offers" checked={acceptsOffers} onChange={() => setAcceptsOffers(true)} />
+                  Open to offers
+                </label>
+              </div>
+              {acceptsOffers && (
+                <input
+                  id="listing-offer-floor"
+                  type="number"
+                  step="0.01"
+                  min={MIN_PRICE_CENTS / 100}
+                  placeholder="Decline offers below ($), optional"
+                  aria-label="Automatically decline offers below this amount, in dollars"
+                  value={offerFloor}
+                  onChange={(e) => setOfferFloor(e.target.value)}
+                  className={inputClass}
+                />
+              )}
+              <p className="mt-1 text-xs text-gray-500">
+                {acceptsOffers
+                  ? "Buyers can offer less, with their card already on hold. You accept, meet them in the middle, or decline. Offers below the amount you set (never shown to buyers) are declined for you; leave it empty to answer every offer yourself."
+                  : 'Buyers pay your price or nothing. You can open it to offers later from the listing page.'}
+              </p>
+            </fieldset>
+          )}
 
           {listingType === 'auction' && (
             <div>

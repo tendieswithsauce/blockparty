@@ -95,6 +95,12 @@ export default function PrivacyPage() {
                   &ldquo;Safety features&rdquo;.
                 </li>
                 <li>
+                  <strong>Shared location:</strong> around an agreed handoff time, you can tap &ldquo;Share my location&rdquo;
+                  to send your current GPS location to the other person in the order chat. It&apos;s only sent when you tap
+                  it, is seen by the other person and Blockparty administrators, and its coordinates are deleted after 90
+                  days.
+                </li>
+                <li>
                   <strong>Technical information:</strong> IP address, browser and device type, and error reports, collected
                   by our hosting provider to keep the service running and secure.
                 </li>
@@ -139,8 +145,8 @@ export default function PrivacyPage() {
                   reviews, your number of sales and purchases, your active listings, and questions and answers on listings.
                 </li>
                 <li>
-                  <strong>Bids</strong> are shown anonymously (&ldquo;Bidder 1&rdquo;, &ldquo;Bidder 2&rdquo;); bids in
-                  charity silent auctions are hidden from other bidders.
+                  <strong>Bids</strong> on auctions show the bidder&apos;s username and amount; bids in charity silent
+                  auctions are hidden from other bidders.
                 </li>
                 <li>
                   <strong>The other party to an order</strong> sees your username, your messages, and the meetup details.
@@ -235,7 +241,7 @@ export default function PrivacyPage() {
                 <strong>Viewing and search history:</strong> up to 400 days, then deleted automatically.
               </li>
               <li>
-                <strong>Handoff location:</strong> 90 days, then deleted automatically.
+                <strong>Handoff location and shared locations:</strong> 90 days, then deleted automatically.
               </li>
               <li>
                 <strong>No-show strikes:</strong> active for 90 days; kept afterwards as a record.

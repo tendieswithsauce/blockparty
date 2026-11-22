@@ -21,6 +21,8 @@ type TransactionRow = {
   cancel_reason: string | null
   canceled_at: string | null
   canceled_by: string | null
+  cancel_note: string | null
+  confirm_by: string | null
   created_at: string
   delivery_fee_cents: number
   fee_waived: boolean
@@ -33,6 +35,7 @@ type TransactionRow = {
   meetup_at: string | null
   meetup_deadline: string | null
   meetup_spot_id: string | null
+  offer_id: number | null
   paid_out_at: string | null
   payout_attempts: number
   payout_cents: number | null
@@ -62,6 +65,39 @@ type TransactionRow = {
 }
 
 export type PayoutHoldReason = 'dispute' | 'dispute_lost' | 'fraud_warning' | 'refunded' | 'admin'
+
+export type OfferStatus =
+  | 'placing'
+  | 'open'
+  | 'countered'
+  | 'accepted'
+  | 'declined'
+  | 'auto_declined'
+  | 'counter_declined'
+  | 'withdrawn'
+  | 'expired'
+  | 'closed'
+  | 'failed'
+
+type OfferRow = {
+  amount_cents: number
+  buyer_id: string
+  counter_cents: number | null
+  counter_payment_intent_id: string | null
+  created_at: string
+  delivery_fee_cents: number
+  expires_at: string | null
+  handoff_method: HandoffMethod
+  held_at: string | null
+  id: number
+  listing_id: number
+  responded_at: string | null
+  seller_id: string
+  status: OfferStatus
+  stripe_payment_intent_id: string | null
+  transaction_id: number | null
+  updated_at: string
+}
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
@@ -251,6 +287,7 @@ export type Database = {
           moderation_attempts: number
           moderation_checked_at: string | null
           moderation_reason: string | null
+          accepts_offers: boolean
           offers_meetup: boolean
           offers_pickup: boolean
           relisted_as: number | null
@@ -287,6 +324,7 @@ export type Database = {
           moderation_attempts?: number
           moderation_checked_at?: string | null
           moderation_reason?: string | null
+          accepts_offers?: boolean
           relisted_as?: number | null
           reserve_met?: boolean
           review_status?: ReviewStatus
@@ -503,10 +541,13 @@ export type Database = {
       }
       order_messages: {
         Row: {
+          accuracy_m: number | null
           body: string
           created_at: string
           id: number
           kind: string
+          lat: number | null
+          lng: number | null
           sender_id: string
           transaction_id: number
         }
@@ -748,6 +789,26 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      offers: {
+        Row: OfferRow
+        Insert: Partial<OfferRow> & { listing_id: number; buyer_id: string; seller_id: string; amount_cents: number; handoff_method: HandoffMethod }
+        Update: Partial<OfferRow>
+        Relationships: [
+          {
+            foreignKeyName: "offers_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listing_offer_floors: {
+        Row: { listing_id: number; floor_cents: number }
+        Insert: { listing_id: number; floor_cents: number }
+        Update: { floor_cents?: number }
+        Relationships: []
       }
       stripe_events: {
         Row: { id: string; received_at: string; transaction_id: number | null; type: string }
@@ -1055,8 +1116,104 @@ export type Database = {
         Returns: string
       }
       cancel_order: {
-        Args: { p_reason: string; p_transaction_id: number; p_user_id: string | null }
+        Args: { p_note?: string; p_reason: string; p_transaction_id: number; p_user_id: string | null }
         Returns: string
+      }
+      cancel_auction_win: {
+        Args: { p_buyer_id: string | null; p_reason: 'win_declined' | 'win_not_confirmed'; p_transaction_id: number }
+        Returns: string | null
+      }
+      expire_unconfirmed_wins: {
+        Args: never
+        Returns: { listing_id: number; payment_intent_id: string | null }[]
+      }
+      my_free_extenuating: {
+        Args: never
+        Returns: boolean
+      }
+      share_order_location: {
+        Args: { p_accuracy_m?: number | null; p_lat: number; p_lng: number; p_transaction_id: number }
+        Returns: Database["public"]["Tables"]["order_messages"]["Row"]
+      }
+      auction_bidder_names: {
+        Args: { p_listing_id: number }
+        Returns: { bidder_no: number; username: string | null }[]
+      }
+      set_listing_offers: {
+        Args: { p_accepts: boolean; p_floor_cents?: number | null; p_listing_id: number }
+        Returns: undefined
+      }
+      my_listing_offer_settings: {
+        Args: { p_listing_id: number }
+        Returns: { accepts_offers: boolean; floor_cents: number | null }[]
+      }
+      offer_midpoint: {
+        Args: { p_offer_cents: number; p_price_cents: number }
+        Returns: number
+      }
+      begin_offer: {
+        Args: { p_amount_cents: number; p_buyer_id: string; p_handoff: HandoffMethod; p_listing_id: number }
+        Returns: OfferRow
+      }
+      offer_hold_placed: {
+        Args: { p_offer_id: number; p_payment_intent_id: string }
+        Returns: boolean
+      }
+      offer_hold_failed: {
+        Args: { p_offer_id: number }
+        Returns: undefined
+      }
+      withdraw_offer: {
+        Args: { p_buyer_id: string; p_offer_id: number }
+        Returns: string | null
+      }
+      respond_to_offer: {
+        Args: {
+          p_action: 'accept' | 'counter' | 'decline'
+          p_fee_bps: number
+          p_min_fee_cents: number
+          p_offer_id: number
+          p_seller_id: string
+        }
+        Returns: Json
+      }
+      begin_counter_accept: {
+        Args: { p_buyer_id: string; p_offer_id: number }
+        Returns: OfferRow
+      }
+      accept_counter: {
+        Args: {
+          p_buyer_id: string
+          p_fee_bps: number
+          p_min_fee_cents: number
+          p_offer_id: number
+          p_payment_intent_id: string
+        }
+        Returns: Json
+      }
+      decline_counter: {
+        Args: { p_buyer_id: string; p_offer_id: number }
+        Returns: string[]
+      }
+      seller_listing_offers: {
+        Args: { p_listing_id: number }
+        Returns: {
+          amount_cents: number
+          buyer_name: string
+          counter_cents: number | null
+          created_at: string
+          delivery_fee_cents: number
+          expires_at: string | null
+          handoff_method: HandoffMethod
+          id: number
+          midpoint_cents: number
+          responded_at: string | null
+          status: OfferStatus
+        }[]
+      }
+      offers_cleanup: {
+        Args: never
+        Returns: { payment_intent_id: string | null }[]
       }
       cancel_pending_purchase: {
         Args: { p_transaction_id: number }
@@ -1139,6 +1296,8 @@ export type Database = {
           p_offers_pickup?: boolean
           p_reserve_cents?: number | null
           p_title: string
+          p_accepts_offers?: boolean
+          p_offer_floor_cents?: number | null
         }
         Returns: number
       }
@@ -1212,14 +1371,7 @@ export type Database = {
       }
       send_order_message: {
         Args: { p_body: string; p_kind?: string; p_transaction_id: number }
-        Returns: {
-          body: string
-          created_at: string
-          id: number
-          kind: string
-          sender_id: string
-          transaction_id: number
-        }
+        Returns: Database["public"]["Tables"]["order_messages"]["Row"]
       }
       public_profile: {
         Args: { p_username: string }

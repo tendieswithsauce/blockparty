@@ -1,9 +1,11 @@
 // app/api/cron/close-auctions/route.ts
 // Called every minute by Supabase pg_cron (only when there's work). Closes
-// ended auctions by holding the winner's card for their bid, moving on to the
-// next-highest bidder if a card fails; releases Buy Now reservations whose
-// 3D Secure check was abandoned; and cancels orders whose meetup deadline
-// passed without a handoff (the buyer's hold is released, nobody is charged).
+// ended auctions (the winner then has 24 hours to confirm and pay), passes
+// wins nobody confirmed in time to the next bidder, releases Buy Now
+// reservations whose 3D Secure check was abandoned, closes offers that ran
+// out or whose item is gone (releasing their card holds), and cancels orders
+// whose meetup deadline passed without a handoff (the buyer's hold is
+// released, nobody is charged).
 // Also runs the automatic check on listings that missed it, and finally
 // emails any queued notifications (public.notifications) and emergency
 // contact alerts (public.safety_alerts). Also retries seller payouts that
@@ -56,41 +58,56 @@ export async function POST(req: NextRequest) {
     if (paymentIntentId) await stripe.paymentIntents.cancel(paymentIntentId).catch(() => {})
   }
 
-  // 3. Auctions that have ended, plus any whose closing was interrupted.
-  const [{ data: ended }, { data: interrupted }] = await Promise.all([
-    admin
-      .from('listings')
-      .select('id')
-      .eq('listing_type', 'auction')
-      .eq('status', 'active')
-      .lte('ends_at', new Date().toISOString())
-      .order('ends_at')
-      .limit(MAX_AUCTIONS_PER_RUN),
-    admin
-      .from('transactions')
-      .select('listing_id, listings!inner(listing_type)')
-      .eq('status', 'pending')
-      .eq('listings.listing_type', 'auction')
-      .limit(MAX_AUCTIONS_PER_RUN),
-  ])
-  const listingIds = [...new Set([...(ended ?? []).map((l) => l.id), ...(interrupted ?? []).map((t) => t.listing_id)])]
+  // 3. Offers that ran out, or whose item sold or was taken down.
+  const { data: offerHolds } = await admin.rpc('offers_cleanup')
+  for (const o of offerHolds ?? []) {
+    if (o.payment_intent_id) await stripe.paymentIntents.cancel(o.payment_intent_id).catch(() => {})
+  }
+
+  // 4. Auction wins not confirmed within 24 hours: release any half-finished
+  //    hold; the listing is active again, so step 5 offers it to the next bidder.
+  const { data: unconfirmed } = await admin.rpc('expire_unconfirmed_wins')
+  for (const u of unconfirmed ?? []) {
+    if (u.payment_intent_id) await stripe.paymentIntents.cancel(u.payment_intent_id).catch(() => {})
+  }
+
+  // 5. Auctions that have ended (or went back to active for the next bidder).
+  const { data: ended } = await admin
+    .from('listings')
+    .select('id')
+    .eq('listing_type', 'auction')
+    .eq('status', 'active')
+    .lte('ends_at', new Date().toISOString())
+    .order('ends_at')
+    .limit(MAX_AUCTIONS_PER_RUN)
+  const listingIds = (ended ?? []).map((l) => l.id)
 
   const outcomes: CloseAuctionOutcome[] = []
   for (const id of listingIds.slice(0, MAX_AUCTIONS_PER_RUN)) {
     outcomes.push(await closeAuction(id))
   }
 
-  // 4. Seller payouts that failed at the handoff.
+  // 6. Seller payouts that failed at the handoff.
   const payouts = await retryPendingPayouts()
 
-  // 5. Listings still waiting for their automatic check.
+  // 7. Listings still waiting for their automatic check.
   const moderation = await checkPendingListings()
 
-  // 6. Emails for notifications, including the ones the steps above just created.
+  // 8. Emails for notifications, including the ones the steps above just created.
   const emails = await sendNotificationEmails(await siteUrl())
 
-  // 7. Emergency contact emails (meetup agreed / done / cancelled).
+  // 9. Emergency contact emails (meetup agreed / done / cancelled).
   const safety = await sendSafetyAlerts()
 
-  return NextResponse.json({ released: stale?.length ?? 0, expired: expired?.length ?? 0, auctions: outcomes, payouts, moderation, emails, safety })
+  return NextResponse.json({
+    released: stale?.length ?? 0,
+    expired: expired?.length ?? 0,
+    offerHoldsReleased: offerHolds?.length ?? 0,
+    winsExpired: unconfirmed?.length ?? 0,
+    auctions: outcomes,
+    payouts,
+    moderation,
+    emails,
+    safety,
+  })
 }

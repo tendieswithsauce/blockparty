@@ -68,9 +68,14 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
   const [method, setMethod] = useState<HandoffMethod>(() => availableMethods(listing.handoff)[0] ?? 'meetup')
   // Stable for the effect below.
   const offered = availableMethods(listing.handoff).join(',')
-  // Set when the viewer won this auction and their card hold went through.
+  // Set when the viewer won this auction (confirmUntil: still to confirm and pay).
   const [wonCents, setWonCents] = useState<number | null>(null)
   const [wonOrderId, setWonOrderId] = useState<number | null>(null)
+  const [confirmUntil, setConfirmUntil] = useState<string | null>(null)
+  // Bidders' usernames by bidder number (normal auctions show who's bidding).
+  const [names, setNames] = useState<Record<number, string | null>>({})
+  // The newest bidder's number, from Realtime (their name may need looking up).
+  const [newBidderNo, setNewBidderNo] = useState<number | null>(null)
   // Set in the browser only: the clock isn't available while prerendering.
   const [now, setNow] = useState<number | null>(null)
   const [amount, setAmount] = useState('')
@@ -111,6 +116,11 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
         .order('amount_cents', { ascending: false })
         .limit(20)
       if (!cancelled) setBids(history ?? [])
+      await loadNames()
+    }
+    async function loadNames() {
+      const { data } = await supabase.rpc('auction_bidder_names', { p_listing_id: listing.id })
+      if (!cancelled && data) setNames(Object.fromEntries(data.map((n) => [n.bidder_no, n.username])))
     }
     async function load() {
       const { data: auth } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }))
@@ -123,10 +133,10 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
           supabase.from('bid_handoff_choices').select('method').eq('listing_id', listing.id).eq('bidder_id', uid).maybeSingle(),
           supabase
             .from('transactions')
-            .select('id, amount_cents')
+            .select('id, amount_cents, status, confirm_by')
             .eq('listing_id', listing.id)
             .eq('buyer_id', uid)
-            .in('status', ['authorized', 'dropped_off', 'completed'])
+            .in('status', ['pending', 'authorized', 'dropped_off', 'completed'])
             .maybeSingle(),
           supabase.rpc('my_bidder_no', { p_listing_id: listing.id }),
         ])
@@ -136,6 +146,7 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
         if (choice?.method && offered.split(',').includes(choice.method)) setMethod(choice.method)
         setWonCents(win?.amount_cents ?? null)
         setWonOrderId(win?.id ?? null)
+        setConfirmUntil(win?.status === 'pending' ? win.confirm_by : null)
         setMyNo(no ?? null)
       }
     }
@@ -172,6 +183,7 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
           setBids((prev) =>
             prev.some((b) => b.id === bid.id) ? prev : [bid, ...prev].sort((a, b) => b.amount_cents - a.amount_cents),
           )
+          setNewBidderNo(bid.bidder_no)
         },
       )
       .subscribe()
@@ -180,8 +192,18 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
     }
   }, [listing.id])
 
-  // Anonymous labels: "You", or Bidder 1, 2... (numbered by the database in order of first bid).
-  const bidderLabel = (no: number) => (myNo !== null && no === myNo ? 'You' : `Bidder ${no}`)
+  // Someone new bid: look up their username.
+  useEffect(() => {
+    if (newBidderNo === null || newBidderNo in names) return
+    createClient()
+      .rpc('auction_bidder_names', { p_listing_id: listing.id })
+      .then(({ data }) => {
+        if (data) setNames(Object.fromEntries(data.map((n) => [n.bidder_no, n.username])))
+      })
+  }, [newBidderNo, names, listing.id])
+
+  // "You", the bidder's username, or Bidder 1, 2... if they have none.
+  const bidderLabel = (no: number) => (myNo !== null && no === myNo ? 'You' : (names[no] ?? `Bidder ${no}`))
 
   // Step 1: check the amount, then ask the bidder to confirm.
   function reviewBid(e: React.FormEvent) {
@@ -269,7 +291,21 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
       {error && <div className="p-3 rounded-xl text-sm bg-red-50 text-red-700">{error}</div>}
       {message && !error && youreWinning && <div className="p-3 rounded-xl text-sm bg-green-50 text-green-800">{message}</div>}
 
-      {wonCents !== null ? (
+      {wonCents !== null && confirmUntil ? (
+        <div className="flex items-start gap-2 p-4 rounded-xl bg-[#F26B5B]/10 text-[#1E293B] text-sm">
+          <Trophy className="w-5 h-5 shrink-0 text-[#F26B5B]" />
+          <p>
+            <span className="font-semibold">You won!</span> Confirm and pay {formatCents(wonCents)} by{' '}
+            {new Date(confirmUntil).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}, or it
+            goes to the next bidder.{' '}
+            {wonOrderId && (
+              <Link href={`/orders/${wonOrderId}`} className="font-semibold underline">
+                Confirm now
+              </Link>
+            )}
+          </p>
+        </div>
+      ) : wonCents !== null ? (
         <div className="flex items-start gap-2 p-4 rounded-xl bg-green-50 text-green-800 text-sm">
           <Trophy className="w-5 h-5 shrink-0" />
           <p>
@@ -387,11 +423,12 @@ export function BidPanel({ listing }: { listing: ListingInfo }) {
             listingId={listing.id}
           />
           <p>
-            If you win, Blockparty will place a hold on your saved card for your bid
-            {method === 'delivery' && <> plus the {formatCents(listing.handoff.deliveryFeeCents ?? 0)} delivery fee</>}. Your
-            card is only charged once you&apos;ve checked the item. <strong>Bids can&apos;t be withdrawn.</strong>
+            If you win, you&apos;ll have 24 hours to confirm and pay your bid
+            {method === 'delivery' && <> plus the {formatCents(listing.handoff.deliveryFeeCents ?? 0)} delivery fee</>}; we
+            hold it on your card then. Your card is only charged once you&apos;ve checked the item.{' '}
+            <strong>Bids can&apos;t be withdrawn.</strong>
           </p>
-          {endsAt && <HandoffDeadlineNote deadline={handoffDeadline(new Date(endsAt))} auction />}
+          {endsAt && <HandoffDeadlineNote deadline={handoffDeadline(new Date(endsAt).getTime() + 86_400_000)} auction />}
         </ConfirmDialog>
       )}
 

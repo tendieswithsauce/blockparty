@@ -19,7 +19,9 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 
 | Function | Args | Returns | Callable by | Security | Purpose |
 |---|---|---|---|---|---|
-| `create_listing` | title, description, listing_type, area_id, category_id, condition, image_paths[], price_cents, duration_days, reserve_cents, offers_meetup, offers_pickup, delivery_fee_cents, delivery_km | bigint (listing id) | auth, service | invoker | Create a listing (fixed, auction or silent). |
+| `create_listing` | title, description, listing_type, area_id, category_id, condition, image_paths[], price_cents, duration_days, reserve_cents, offers_meetup, offers_pickup, delivery_fee_cents, delivery_km, accepts_offers, offer_floor_cents | bigint (listing id) | auth, service | invoker | Create a listing (fixed, auction or silent). A Set Price listing can be open to offers, with an optional amount below which offers are declined automatically. |
+| `set_listing_offers` | listing_id, accepts, floor_cents | void | auth, service | definer | Seller makes a Set Price listing firm or open to offers, and sets or clears the automatic decline amount (listing_offer_floors, never readable by members). |
+| `my_listing_offer_settings` | listing_id | table (accepts_offers, floor_cents) | auth, service | definer | The seller's own offer settings for a listing. |
 | `convert_to_auction` | listing_id, starting_price_cents, duration_days, reserve_cents | void | auth, service | definer | Turn an unsold fixed-price listing into an auction. |
 | `search_listings` | query, category_id, area_ids[], listing_type, conditions[], min_cents, max_cents, sort, limit, offset | setof listings | anon, auth, service | invoker | Browse and search; hides blocked members' items. |
 | `listing_photos_ok` | paths[] | boolean | anon, auth, service | invoker | Checks photo paths are valid. |
@@ -35,13 +37,18 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 |---|---|---|---|---|---|
 | `begin_purchase` | listing_id, buyer_id, fee_bps, min_fee_cents, handoff | transactions | service | definer | Starts a Buy Now order. |
 | `place_bid` | listing_id, amount_cents, handoff | bids | auth, service | definer | Places a bid; extends the auction 2 min if it lands in the last 2. |
-| `close_auction` | listing_id, fee_bps, min_fee_cents | transactions | service | definer | Closes an ended auction and creates the order (skips blocked bidders and bidders whose order was cancelled, so it also hands the item to the next bidder). |
+| `close_auction` | listing_id, fee_bps, min_fee_cents | transactions | service | definer | Closes an ended auction and creates a pending order with confirm_by = 24 hours, and tells the winner (confirm and pay) and the seller. Skips blocked bidders and bidders whose order was cancelled, so it also hands the item to the next bidder. |
+| `cancel_auction_win` | transaction_id, buyer_id, reason (win_declined / win_not_confirmed) | text (payment intent to release) | service | definer | The winner passes (buyer_id given) or their 24 hours ran out (buyer_id null, only after confirm_by). Counts as a buyer cancellation; the listing goes back to active for the next bidder. |
+| `expire_unconfirmed_wins` | | table (listing_id, payment_intent_id) | service | definer | Cron: cancels wins past confirm_by (win_not_confirmed) and returns the listings to offer to the next bidder. |
+| `auction_bidder_names` | listing_id | table (bidder_no, username) | anon, auth, service | definer | Bidders' usernames by bidder number for the bid history. Empty for silent auctions. |
 | `silent_bid_status` | listing_id | table | anon, auth, service | definer | The caller's own silent bid and whether it leads. |
 | `my_bidder_no` | listing_id | integer | auth, service | definer | The caller's bidder number on an auction (null if they haven't bid); bidder ids aren't readable through the API. |
 | `my_bids` | limit | setof bids | auth, service | definer | The caller's bids, newest first (dashboard); can embed the listing. |
-| `cancel_authorized_purchase` | transaction_id, buyer_id, window_seconds | text | service | definer | Buyer's undo window for Buy Now. |
+| `cancel_authorized_purchase` | transaction_id, buyer_id, window_seconds | text | service | definer | Buyer's undo window for Buy Now (not for accepted offers). |
 | `cancel_pending_purchase` | transaction_id | void | service | definer | Cancels a purchase that never completed payment. |
-| `cancel_order` | transaction_id, user_id, reason | text | service | definer | Cancels an order with a reason. Set Price listings pause (inactive); an auction the buyer backed out of goes back to active so close_auction offers it to the next bidder. |
+| `cancel_order` | transaction_id, user_id, reason, note | text | service | definer | Cancels an order with a reason. Set Price listings pause (inactive); an auction the buyer backed out of goes back to active so close_auction offers it to the next bidder. Reason 'extenuating' (seller only) needs a 10–500 character note, which the buyer sees; admins are told. |
+| `is_free_extenuating` | transactions row | boolean | service | definer | Is this a seller's 'extenuating' cancel with no other one in the 90 days before it (so it doesn't count toward the limit)? |
+| `my_free_extenuating` | | boolean | auth, service | definer | Would the caller's next 'extenuating' cancel be free (none in the last 90 days)? |
 | `passes_to_next_bidder` | transactions row | boolean | (internal) | invoker | Did the buyer back out (buyer cancelled, or seller reported a buyer no-show)? |
 | `relist_listing` | listing_id | void | auth, service | definer | Seller puts a paused Set Price listing back up. |
 | `end_my_listing` | listing_id | void | auth, service | definer | Seller takes a listing off sale (inactive). Auctions only before any bids; an ended auction can then be relisted. |
@@ -64,7 +71,7 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `get_handoff_code` | transaction_id | text | auth, service | definer | The buyer's handoff code. |
 | `check_handoff_code` | transaction_id, seller_id, code | boolean | service | definer | Verifies the code the seller enters. |
 | `order_handoff_place` | transaction_id | table (method, address, address_hidden_until, address_hidden_reason) | auth, service | definer | Handoff method and home address. The address owner always sees it; the other person only from 2 hours before the agreed time (reason no_time / before_time otherwise). |
-| `recent_cancellations` | user_id, as (buyer / seller) | table (n, oldest) | service | definer | Orders the person cancelled in the last 30 days (not no-show reports, not the Buy Now undo). 3 pauses buying and bidding, or new listings. |
+| `recent_cancellations` | user_id, as (buyer / seller) | table (n, oldest) | service | definer | Orders the person cancelled in the last 30 days (not no-show reports, not the Buy Now undo, not a seller's free 'extenuating' cancel; passing on or not confirming an auction win counts). 3 pauses buying and bidding, or new listings. |
 | `my_cancellations_left` | as (buyer / seller) | integer | auth, service | definer | How many more the signed-in member can cancel before the pause (cancel dialog warning). |
 | `record_card_fingerprint` | user_id, fingerprint | void | service | definer | Records a saved card's Stripe fingerprint (live keys only, or CARD_FINGERPRINT_CHECK=on); tells admins when it's on another account too. |
 | `shares_card` | a, b | boolean | (none) | definer | Have these two accounts ever saved the same card (used by enforce_strike_limit). |
@@ -73,8 +80,31 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `propose_meetup` | transaction_id, spot_id, times[], note | void | auth, service | definer | Propose a spot and times (no spot for home handoffs). |
 | `choose_meetup_time` | transaction_id, time | void | auth, service | definer | Other party picks a time. |
 | `send_order_message` | transaction_id, body, kind | order_messages | auth, service | definer | Order chat message. |
+| `share_order_location` | transaction_id, lat, lng, accuracy_m | order_messages | auth, service | definer | "Share my location": posts the caller's GPS position into the order chat (kind 'location') for the other person, from 2 hours before the agreed time to 2 hours after; one every 15 seconds. Also updates the admin handoff log. Coordinates are wiped after 90 days (cron purge-shared-locations). |
 | `record_handoff_location` | transaction_id, lat, lng, accuracy_m | void | auth, service | definer | Handoff GPS record (admin-only, purged after 90 days). |
 | `platform_fee` | amount_cents, fee_bps, min_fee_cents | integer | anon, auth, service | invoker | Fee on the item price (10%, $5 minimum). |
+
+## Offers
+
+Every offer is held on the buyer's card (3D Secure) before the seller sees it; the app (app/offers/actions.ts) places and releases the holds. Up to 3 offers per buyer per listing (failed holds don't count), one at a time.
+
+| Function | Args | Returns | Callable by | Security | Purpose |
+|---|---|---|---|---|---|
+| `begin_offer` | listing_id, buyer_id, amount_cents, handoff | offers | service | definer | Checks and records an offer (status placing). Below the seller's automatic decline amount it's auto_declined straight away (no hold). |
+| `offer_hold_placed` | offer_id, payment_intent_id | boolean | service | definer | The hold went through: the offer is open for 48 hours and the seller is told. False if the item is no longer for sale. |
+| `offer_hold_failed` | offer_id | void | service | definer | The card was declined or 3D Secure failed (status failed; doesn't count toward the 3). |
+| `withdraw_offer` | offer_id, buyer_id | text (payment intent to release) | service | definer | The buyer takes back an open offer. |
+| `respond_to_offer` | offer_id, seller_id, action (accept / counter / decline), fee_bps, min_fee_cents | jsonb (transaction_id, release[]) | service | definer | Seller's answer. Accept creates the order (authorized, using the offer's hold) and closes the other offers; counter offers the middle price for 24 hours; decline releases the hold. |
+| `begin_counter_accept` | offer_id, buyer_id | offers | service | definer | Checks the buyer can take the middle price (before the new hold). |
+| `accept_counter` | offer_id, buyer_id, payment_intent_id, fee_bps, min_fee_cents | jsonb (transaction_id, release[]) | service | definer | The middle price is held: creates the order and closes the other offers. |
+| `decline_counter` | offer_id, buyer_id | text[] (payment intents to release) | service | definer | The buyer passes on the middle price; the seller is told. |
+| `seller_listing_offers` | listing_id | table | auth, service | definer | The seller's offers on a listing with buyer names and the middle price (open ones first). |
+| `offers_cleanup` | | table (payment_intent_id) | service | definer | Cron: offers past their time (expired), on items no longer for sale (closed), or stuck placing (failed); tells buyers and returns the holds to release. |
+| `offer_to_order` | offer_id, amount_cents, payment_intent_id, held_at, fee_bps, min_fee_cents | bigint | service | definer | Internal: creates the authorized order from an offer; the handoff deadline is capped so the card hold (7 days) doesn't run out first. |
+| `close_other_offers` | listing_id, except_offer_id | text[] | service | definer | Internal: closes the listing's other offers and tells those buyers. |
+| `offers_left` | listing_id, buyer_id | integer | service | definer | Internal: how many of the 3 offers the buyer has left. |
+| `offer_listing_gone` | listings row | boolean | service | definer | Internal: the item isn't for sale any more (a Buy Now still mid 3D Secure doesn't count). |
+| `offer_midpoint` | price_cents, offer_cents | integer | anon, auth, service | invoker | Halfway between the offer and the price, rounded to the dollar when that stays in between. |
 | `charity_fee_free_used` | charity_id | integer | service | definer | Fee-free sales used by a charity. |
 | `seller_can_receive_payouts` | | boolean | auth, service | definer | Has the caller finished Stripe onboarding. |
 
@@ -133,10 +163,10 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `claim_anonymous_engagement` | anon_id | void | auth, service | definer | Attach signed-out history to the account at sign-in. |
 | `engagement_over_limit` | user_id, anon_id | boolean | service | invoker | Rate-limit check for logging. |
 | `notify` | user_id, kind, title, body, link, listing_id, transaction_id, email, dedupe_key | void | service | definer | Create an in-app notification (optionally emailed). |
-| `notifications_sweep` | | void | service | definer | Scheduled sweep for time-based notices. |
+| `notifications_sweep` | | void | service | definer | Scheduled sweep for time-based notices (sold, meetup soon, auction ending, and "confirm your win" 4 hours before the 24 hours run out). |
 | `claim_notification_emails` | limit | table | service | definer | Queue of emails to send. |
 | `claim_safety_alerts` | limit | table | service | definer | Queue of emergency-contact emails. |
-| `auction_work_pending` | | boolean | service | definer | True when the cron has work (auctions, holds, emails, moderation, payouts that are due or failed); gates the pg_cron job. |
+| `auction_work_pending` | | boolean | service | definer | True when the cron has work (ended auctions, wins past their 24 hours, offers to close, holds, emails, moderation, payouts that are due or failed); a win still within its 24 hours is not work. Gates the pg_cron job. |
 
 ## Admin (all check `is_admin()` inside)
 
@@ -193,6 +223,6 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `on_bid_placed` | bids | Outbid and bid notices. |
 | `enforce_no_block_bid`, `enforce_no_block_purchase`, `enforce_no_block_question` | bids, transactions, listing_questions | Reject activity between blocked members. |
 | `on_transaction_authorized`, `on_transaction_notify`, `on_transaction_safety_alert` | transactions | Status notices and emergency-contact alerts. |
-| `on_order_message` | order_messages | Message notices. |
-| `on_no_show_reported`, `enforce_strike_limit` | no-shows; bids, listings and Set Price orders | Strikes. Before a bid, listing or purchase: blocks suspended members, 3 strikes, 3 cancellations in 30 days, and buying from or bidding on an account that shared your card. |
+| `on_order_message` | order_messages | Message notices, including "shared their location". |
+| `on_no_show_reported`, `enforce_strike_limit` | no-shows; bids, offers, listings and Set Price orders | Strikes. Before a bid, offer, listing or purchase: blocks suspended members, 3 strikes, 3 cancellations in 30 days, and buying from or bidding on an account that shared your card. |
 | `on_review`, `on_listing_review`, `on_order_completed_review_request` | reviews, transactions | Rating totals and review requests. |

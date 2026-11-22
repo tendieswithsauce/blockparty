@@ -54,6 +54,8 @@ export function SilentBidPanel({ listing }: { listing: ListingInfo }) {
   const [myBid, setMyBid] = useState<number | null>(null)
   const [leading, setLeading] = useState(false)
   const [wonOrderId, setWonOrderId] = useState<number | null>(null)
+  // Set while the viewer's win still needs confirming and paying.
+  const [confirmUntil, setConfirmUntil] = useState<string | null>(null)
   const [now, setNow] = useState<number | null>(null)
   const [amount, setAmount] = useState('')
   const [pendingCents, setPendingCents] = useState<number | null>(null)
@@ -95,10 +97,10 @@ export function SilentBidPanel({ listing }: { listing: ListingInfo }) {
           supabase.from('bid_handoff_choices').select('method').eq('listing_id', listing.id).eq('bidder_id', uid).maybeSingle(),
         supabase
           .from('transactions')
-          .select('id')
+          .select('id, status, confirm_by')
           .eq('listing_id', listing.id)
           .eq('buyer_id', uid)
-          .in('status', ['authorized', 'dropped_off', 'completed'])
+          .in('status', ['pending', 'authorized', 'dropped_off', 'completed'])
           .maybeSingle(),
       ])
       if (cancelled) return
@@ -106,6 +108,7 @@ export function SilentBidPanel({ listing }: { listing: ListingInfo }) {
       setHasHomeAddress(Boolean(profile?.home_address))
       if (choice?.method && offered.split(',').includes(choice.method)) setMethod(choice.method)
       setWonOrderId(win?.id ?? null)
+      setConfirmUntil(win?.status === 'pending' ? win.confirm_by : null)
       await refreshStanding()
     }
     load()
@@ -209,7 +212,19 @@ export function SilentBidPanel({ listing }: { listing: ListingInfo }) {
 
       {error && <div className="p-3 rounded-xl text-sm bg-red-50 text-red-700">{error}</div>}
 
-      {wonOrderId !== null ? (
+      {wonOrderId !== null && confirmUntil ? (
+        <div className="flex items-start gap-2 p-4 rounded-xl bg-[#F26B5B]/10 text-[#1E293B] text-sm">
+          <Trophy className="w-5 h-5 shrink-0 text-[#F26B5B]" />
+          <p>
+            <span className="font-semibold">You won!</span> Confirm and pay by{' '}
+            {new Date(confirmUntil).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}, or it
+            goes to the next bidder.{' '}
+            <Link href={`/orders/${wonOrderId}`} className="font-semibold underline">
+              Confirm now
+            </Link>
+          </p>
+        </div>
+      ) : wonOrderId !== null ? (
         <div className="flex items-start gap-2 p-4 rounded-xl bg-green-50 text-green-800 text-sm">
           <Trophy className="w-5 h-5 shrink-0" />
           <p>
@@ -309,11 +324,12 @@ export function SilentBidPanel({ listing }: { listing: ListingInfo }) {
             listingId={listing.id}
           />
           <p>
-            If yours is the highest bid when it ends, Blockparty will place a hold on your saved card for it
-            {method === 'delivery' && <> plus the {formatCents(listing.handoff.deliveryFeeCents ?? 0)} delivery fee</>}. Your
-            card is only charged once you&apos;ve checked the item. <strong>Bids can&apos;t be withdrawn.</strong>
+            If yours is the highest bid when it ends, you&apos;ll have 24 hours to confirm and pay it
+            {method === 'delivery' && <> plus the {formatCents(listing.handoff.deliveryFeeCents ?? 0)} delivery fee</>}; we
+            hold it on your card then. Your card is only charged once you&apos;ve checked the item.{' '}
+            <strong>Bids can&apos;t be withdrawn.</strong>
           </p>
-          {endsAt && <HandoffDeadlineNote deadline={handoffDeadline(new Date(endsAt))} auction />}
+          {endsAt && <HandoffDeadlineNote deadline={handoffDeadline(new Date(endsAt).getTime() + 86_400_000)} auction />}
         </ConfirmDialog>
       )}
     </div>
