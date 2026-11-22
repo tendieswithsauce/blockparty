@@ -4,7 +4,9 @@
 import { headers } from 'next/headers'
 
 export async function siteUrl(): Promise<string> {
-  if (process.env.NEXT_PUBLIC_SITE_URL) {
+  // Only the live site uses the fixed address. The dev site shares the same
+  // environment variables, so it would otherwise send people to the live site.
+  if (process.env.NEXT_PUBLIC_SITE_URL && process.env.VERCEL_ENV === 'production') {
     return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')
   }
   const h = await headers()

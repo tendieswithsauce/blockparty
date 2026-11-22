@@ -5,7 +5,6 @@ import { useActionState, useState } from 'react'
 import { ShieldAlert } from 'lucide-react'
 import { signUp, type AuthFormState } from '@/app/auth/actions'
 import { FormAlert } from '@/components/auth/FormAlert'
-import { GoogleButton } from '@/components/auth/GoogleButton'
 import { SubmitButton, TextField } from '@/components/auth/fields'
 import { DisplayNameField, type NameStatus } from '@/components/DisplayNameField'
 import { AreaSelect } from '@/components/AreaSelect'
@@ -38,7 +37,7 @@ export function SignupForm() {
     <div className="space-y-6">
       <FormAlert error={state.error} />
 
-      <GoogleButton next="/dashboard" showTerms={false} />
+      {/* Google sign-in is switched off for now (redirect issues on the dev site). */}
 
       <form action={formAction} className="space-y-4">
         <DisplayNameField value={username} onChange={setUsername} onStatus={setNameStatus} generateInitial />

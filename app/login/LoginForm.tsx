@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { signIn, type AuthFormState } from '@/app/auth/actions'
 import { FormAlert } from '@/components/auth/FormAlert'
-import { GoogleButton } from '@/components/auth/GoogleButton'
 import { SubmitButton, TextField } from '@/components/auth/fields'
 
 const initialState: AuthFormState = {}
@@ -21,7 +20,7 @@ export function LoginForm() {
     <div className="space-y-6">
       <FormAlert error={state.error ?? urlError} message={state.message} />
 
-      <GoogleButton next={next} />
+      {/* Google sign-in is switched off for now (redirect issues on the dev site). */}
 
       <form action={formAction} className="space-y-4">
         {next && <input type="hidden" name="next" value={next} />}

@@ -28,6 +28,15 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Same for email links that fell back to the bare Site URL ({{ .RedirectTo }}
+  // with no path): /?token_hash=...&type=... goes on to the confirm route.
+  const tokenHash = request.nextUrl.searchParams.get('token_hash')
+  if (tokenHash && !request.nextUrl.pathname.startsWith('/auth/')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/auth/confirm'
+    return NextResponse.redirect(url)
+  }
+
   let response = NextResponse.next({ request })
 
   const supabase = createServerClient<Database>(

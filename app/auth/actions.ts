@@ -95,7 +95,10 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
         bp_ec_name: ecEmail ? ecName : '',
         bp_ec_email: ecEmail,
       },
-      emailRedirectTo: `${await siteUrl()}/auth/callback?next=/dashboard`,
+      // The email template builds its link from this ({{ .RedirectTo }}), so a
+      // sign-up on the dev site confirms on the dev site. It must be in
+      // Supabase's Redirect URLs list, or Supabase falls back to the Site URL.
+      emailRedirectTo: `${await siteUrl()}/auth/confirm`,
     },
   })
 
@@ -154,7 +157,8 @@ export async function requestPasswordReset(
 
   const supabase = await createClient()
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${await siteUrl()}/auth/callback?next=/reset-password`,
+    // Used by the email template as {{ .RedirectTo }} (see sign-up above).
+    redirectTo: `${await siteUrl()}/auth/confirm`,
   })
 
   if (error?.code === 'over_email_send_rate_limit') {
