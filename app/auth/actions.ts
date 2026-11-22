@@ -48,7 +48,7 @@ export async function signIn(_prev: AuthFormState, formData: FormData): Promise<
 // Email + password sign-up
 // ---------------------------------------------------------------------------
 export async function signUp(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
-  const username = field(formData, 'username')
+  const username = field(formData, 'display_name')
   const fullName = field(formData, 'full_name')
   const email = field(formData, 'email')
   const password = formData.get('password')

@@ -27,6 +27,9 @@ export function SafetyMenu({
   const [me, setMe] = useState<string | null | undefined>(undefined)
   const [blockedByMe, setBlockedByMe] = useState(false)
   const [open, setOpen] = useState(false)
+  // Which way the menu opens: towards whichever side of the button has room,
+  // so it never runs off a phone screen (the button can sit on either side).
+  const [openRight, setOpenRight] = useState(false)
   const [report, setReport] = useState<ReportTarget | null>(null)
   const [confirmBlock, setConfirmBlock] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -80,7 +83,12 @@ export function SafetyMenu({
     <div ref={menuRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          const box = menuRef.current?.getBoundingClientRect()
+          // 240px menu + a little margin.
+          if (box) setOpenRight(box.right - 248 < 0)
+          setOpen((o) => !o)
+        }}
         aria-label="More options"
         aria-expanded={open}
         className="p-2 rounded-full border text-slate-600 hover:bg-slate-50"
@@ -88,7 +96,9 @@ export function SafetyMenu({
         <MoreHorizontal className="w-4 h-4" />
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-60 bg-white border rounded-2xl shadow-xl z-40 overflow-hidden divide-y">
+        <div
+          className={`absolute ${openRight ? 'left-0' : 'right-0'} mt-2 w-60 max-w-[calc(100vw-1rem)] bg-white border rounded-2xl shadow-xl z-40 overflow-hidden divide-y`}
+        >
           {me === null ? (
             <Link href={`/login?next=${encodeURIComponent(loginNext)}`} className={item}>
               <Flag className="w-4 h-4 text-red-600" /> Sign in to report or block

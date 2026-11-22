@@ -10,8 +10,10 @@ import { createClient } from '@/lib/supabase/client'
 export type NameStatus = 'idle' | 'checking' | 'ok' | 'bad'
 
 export function DisplayNameField({
-  id = 'username',
-  name = 'username',
+  id = 'display_name',
+  // Not called "username": browsers treat a field with that name as the login
+  // username and autofill an email address into it.
+  name = 'display_name',
   value,
   onChange,
   onStatus,
@@ -98,7 +100,11 @@ export function DisplayNameField({
             minLength={3}
             maxLength={20}
             pattern="[A-Za-z0-9_]{3,20}"
-            autoComplete="username"
+            // A public nickname, never a login: keep password managers and autofill out.
+            autoComplete="off"
+            data-1p-ignore
+            data-lpignore="true"
+            data-form-type="other"
             autoCapitalize="off"
             spellCheck={false}
             disabled={disabled}
