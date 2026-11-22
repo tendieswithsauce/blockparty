@@ -28,6 +28,9 @@ export function SiteFooter() {
           <Link href="/#how-it-works" className={link}>
             How It Works
           </Link>
+          <Link href="/about" className={link}>
+            About Us
+          </Link>
           <Link href="/terms" className={link}>
             Terms of Use
           </Link>

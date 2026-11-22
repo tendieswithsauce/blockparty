@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Camera, ChevronRight, HeartHandshake, Info, LayoutGrid, LogOut, ShieldAlert, Shield, Trash2 } from 'lucide-react'
+import { Camera, ChevronRight, HeartHandshake, Info, LayoutGrid, LogOut, ShieldAlert, Shield, Trash2, Users } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { AreaSelect } from '@/components/AreaSelect'
 import { DisplayNameField, type NameStatus } from '@/components/DisplayNameField'
@@ -518,6 +518,7 @@ export default function ProfilePage() {
                 { href: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
                 { href: '/charities', label: 'Charities', icon: HeartHandshake },
                 { href: '/#how-it-works', label: 'How it works', icon: Info },
+                { href: '/about', label: 'About Blockparty', icon: Users },
                 ...(isAdmin ? [{ href: '/admin', label: 'Admin', icon: Shield }] : []),
               ].map(({ href, label, icon: Icon }) => (
                 <Link key={href} href={href} className="flex items-center gap-3 px-5 py-4 font-semibold active:bg-slate-50">
