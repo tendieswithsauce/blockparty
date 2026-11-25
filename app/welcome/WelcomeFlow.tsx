@@ -135,9 +135,9 @@ export function WelcomeFlow({ next }: { next: string }) {
           </label>
 
           <fieldset className="space-y-3 rounded-xl bg-[#0E4D5C]/5 p-4">
-            <legend className="sr-only">Emergency contact</legend>
+            <legend className="sr-only">Trusted contact</legend>
             <p className="flex items-center gap-2 text-sm font-semibold text-[#0E4D5C]">
-              <ShieldAlert className="w-4 h-4" /> Emergency contact <span className="font-normal text-slate-500">(optional)</span>
+              <ShieldAlert className="w-4 h-4" /> Trusted contact <span className="font-normal text-slate-500">(optional)</span>
             </p>
             <p className="text-xs text-slate-600">{WHY.emergency}</p>
             <div className="grid sm:grid-cols-2 gap-3">

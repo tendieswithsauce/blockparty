@@ -813,8 +813,8 @@ function SafetyTips({ method }: { method: HandoffMethod }) {
           </>
         )}
         <li>
-          Add an <Link href="/profile" className="underline">emergency contact</Link> and we&apos;ll email them where and when you&apos;re
-          meeting.
+          Add a <Link href="/profile" className="underline">trusted contact</Link> and, once they agree, we&apos;ll email them where and
+          when you&apos;re meeting.
         </li>
         <li>Never pay or accept payment outside Blockparty, and never share your code before checking the item.</li>
       </ul>

@@ -165,7 +165,11 @@ Every offer is held on the buyer's card (3D Secure) before the seller sees it; t
 | `notify` | user_id, kind, title, body, link, listing_id, transaction_id, email, dedupe_key | void | service | definer | Create an in-app notification (optionally emailed). |
 | `notifications_sweep` | | void | service | definer | Scheduled sweep for time-based notices (sold, meetup soon, auction ending, and "confirm your win" 4 hours before the 24 hours run out). |
 | `claim_notification_emails` | limit | table | service | definer | Queue of emails to send. |
-| `claim_safety_alerts` | limit | table | service | definer | Queue of emergency-contact emails. |
+| `claim_safety_alerts` | limit | table (id, kind, to_email, to_name, subject, body, link, cta_label) | service | definer | Queue of trusted contact emails: requests to agree (kind invite) and meetup alerts. link is a site path (/buddy/<token>). |
+| `queue_buddy_invite` | user_id, manual | text (why not sent, or null) | service | definer | Internal: queues the "be my trusted contact" request. Only for a member whose own email is confirmed, while pending; 3 a day, and a manual resend at most hourly. |
+| `send_buddy_request` | | void | auth, service | definer | The member sends (or resends) the request to their trusted contact. |
+| `safety_buddy_request` | token | table (member_name, contact_name, status) | anon, auth, service | definer | The /buddy/<token> page: the member's first name (or display name), the buddy's name and pending / agreed / declined. Empty if the link is stale. |
+| `answer_safety_buddy` | token, agree | text (agreed / declined) | anon, auth, service | definer | The buddy agrees, says no, stops later, or changes their mind; tells the member. Tokens live in safety_buddy_tokens (no member access). |
 | `auction_work_pending` | | boolean | service | definer | True when the cron has work (ended auctions, wins past their 24 hours, offers to close, holds, emails, moderation, payouts that are due or failed); a win still within its 24 hours is not work. Gates the pg_cron job. |
 
 ## Admin (all check `is_admin()` inside)
@@ -206,7 +210,9 @@ Every offer is held on the buyer's card (3D Secure) before the seller sees it; t
 
 | Function | Fires on | Does |
 |---|---|---|
-| `handle_new_user`, `handle_user_email_change` | auth users | Create or sync the profile. handle_new_user also copies the sign-up details (area, phone, address, emergency contact). |
+| `handle_new_user`, `handle_user_email_change` | auth users | Create or sync the profile. handle_new_user also copies the sign-up details (area, phone, address, trusted contact). |
+| `profiles_buddy_reset`, `profiles_buddy_invite` | profiles (insert or update of emergency_contact_email) | A new or changed trusted contact address goes back to pending with a new link, and the request is queued. |
+| `on_auth_user_confirmed_buddy` | auth users (email confirmed) | Sends the request for a trusted contact named at sign-up once the member confirms their email. |
 | `block_suspended_reactivation` | listings (before update of status) | A suspended seller's listing can't go from inactive back to active. |
 | `stash_signup_details` | auth users (before insert) | Strips the bp_ sign-up keys from the stored metadata and hands them to handle_new_user in the same transaction. |
 | `lock_auction_with_bids` | listings | Once an auction has bids, the seller can't edit it or take it down. |
@@ -222,7 +228,7 @@ Every offer is held on the buyer's card (3D Secure) before the seller sees it; t
 | `watchlist_count` | watchlist | Maintains watcher counts. |
 | `on_bid_placed` | bids | Outbid and bid notices. |
 | `enforce_no_block_bid`, `enforce_no_block_purchase`, `enforce_no_block_question` | bids, transactions, listing_questions | Reject activity between blocked members. |
-| `on_transaction_authorized`, `on_transaction_notify`, `on_transaction_safety_alert` | transactions | Status notices and emergency-contact alerts. |
+| `on_transaction_authorized`, `on_transaction_notify`, `on_transaction_safety_alert` | transactions | Status notices and trusted contact alerts (only to a trusted contact who agreed). |
 | `on_order_message` | order_messages | Message notices, including "shared their location". |
 | `on_no_show_reported`, `enforce_strike_limit` | no-shows; bids, offers, listings and Set Price orders | Strikes. Before a bid, offer, listing or purchase: blocks suspended members, 3 strikes, 3 cancellations in 30 days, and buying from or bidding on an account that shared your card. |
 | `on_review`, `on_listing_review`, `on_order_completed_review_request` | reviews, transactions | Rating totals and review requests. |

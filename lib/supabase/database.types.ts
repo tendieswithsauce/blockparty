@@ -579,6 +579,9 @@ export type Database = {
           email_alerts: boolean
           emergency_contact_email: string | null
           emergency_contact_name: string | null
+          emergency_contact_answered_at: string | null
+          emergency_contact_invited_at: string | null
+          emergency_contact_status: string | null
           full_name: string | null
           home_address: string | null
           id: string
@@ -842,7 +845,9 @@ export type Database = {
           subject: string
           to_email: string
           to_name: string | null
-          transaction_id: number
+          transaction_id: number | null
+          link: string | null
+          cta_label: string | null
           user_id: string
         }
         Insert: never
@@ -1561,8 +1566,23 @@ export type Database = {
       remove_question: { Args: { p_question_id: number }; Returns: undefined }
       claim_safety_alerts: {
         Args: { p_limit?: number }
-        Returns: { body: string; id: number; subject: string; to_email: string; to_name: string | null }[]
+        Returns: {
+          body: string
+          cta_label: string | null
+          id: number
+          kind: string
+          link: string | null
+          subject: string
+          to_email: string
+          to_name: string | null
+        }[]
       }
+      send_buddy_request: { Args: never; Returns: undefined }
+      safety_buddy_request: {
+        Args: { p_token: string }
+        Returns: { contact_name: string | null; member_name: string | null; status: string | null }[]
+      }
+      answer_safety_buddy: { Args: { p_agree: boolean; p_token: string }; Returns: string }
       save_search: {
         Args: {
           p_area_ids?: string[] | null

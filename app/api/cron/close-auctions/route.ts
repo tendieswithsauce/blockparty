@@ -7,7 +7,7 @@
 // whose meetup deadline passed without a handoff (the buyer's hold is
 // released, nobody is charged).
 // Also runs the automatic check on listings that missed it, and finally
-// emails any queued notifications (public.notifications) and emergency
+// emails any queued notifications (public.notifications) and trusted contact
 // contact alerts (public.safety_alerts). Also retries seller payouts that
 // failed at the handoff.
 // Protected by CRON_SECRET (same value as cron_secret in Supabase Vault).
@@ -96,8 +96,8 @@ export async function POST(req: NextRequest) {
   // 8. Emails for notifications, including the ones the steps above just created.
   const emails = await sendNotificationEmails(await siteUrl())
 
-  // 9. Emergency contact emails (meetup agreed / done / cancelled).
-  const safety = await sendSafetyAlerts()
+  // 9. Trusted contact emails (requests to agree; meetup agreed / done / cancelled).
+  const safety = await sendSafetyAlerts(await siteUrl())
 
   return NextResponse.json({
     released: stale?.length ?? 0,

@@ -1,6 +1,6 @@
 // app/profile/page.tsx
 // Your account: photo, display name, private details (home address,
-// emergency contact), alerts, payment method. On phones it's also the "Me"
+// trusted contact, and whether they've agreed), alerts, payment method. On phones it's also the "Me"
 // tab, so it carries the links that live in the desktop header.
 'use client'
 
@@ -33,6 +33,9 @@ type Saved = {
   ecEmail: string
   emailAlerts: boolean
 }
+/** Whether the trusted contact has agreed (set by the database, read-only here). */
+type Buddy = { status: 'pending' | 'agreed' | 'declined' | null; invitedAt: string | null }
+
 const EMPTY_SAVED: Saved = { fullName: '', phone: '', areaId: '', areaName: '', homeAddress: '', ecName: '', ecEmail: '', emailAlerts: true }
 
 /** Square-crops and shrinks a photo to a 400px JPEG in the browser. */
@@ -67,6 +70,7 @@ export default function ProfilePage() {
   const [ecName, setEcName] = useState('')
   const [ecEmail, setEcEmail] = useState('')
   const [emailAlerts, setEmailAlerts] = useState(true)
+  const [buddy, setBuddy] = useState<Buddy>({ status: null, invitedAt: null })
   const [saved, setSaved] = useState<Saved>(EMPTY_SAVED)
   const [editing, setEditing] = useState<Set<DetailKey>>(new Set())
   const [areaNames, setAreaNames] = useState<Map<string, string>>(new Map())
@@ -90,7 +94,7 @@ export default function ProfilePage() {
         supabase
           .from('profiles')
           .select(
-            'username, username_changed_at, full_name, phone, area_id, email_alerts, avatar_path, home_address, emergency_contact_name, emergency_contact_email, area:areas(name, city)',
+            'username, username_changed_at, full_name, phone, area_id, email_alerts, avatar_path, home_address, emergency_contact_name, emergency_contact_email, emergency_contact_status, emergency_contact_invited_at, area:areas(name, city)',
           )
           .eq('id', user.id)
           .single(),
@@ -111,6 +115,7 @@ export default function ProfilePage() {
         setHomeAddress(data.home_address || '')
         setEcName(data.emergency_contact_name || '')
         setEcEmail(data.emergency_contact_email || '')
+        setBuddy(toBuddy(data))
         setSaved({
           fullName: data.full_name || '',
           phone: data.phone || '',
@@ -217,7 +222,21 @@ export default function ProfilePage() {
 
     setSaving(false)
     if (error) return setStatus({ ok: false, text: 'Could not save your profile. Please try again.' })
-    setStatus({ ok: true, text: 'Profile saved.' })
+    // A new address starts over: the database resets it and sends the request
+    // (unless 3 have gone out today; then the status line offers to send it).
+    let text = 'Profile saved.'
+    if (contactEmail !== saved.ecEmail) {
+      const { data: fresh } = await supabase
+        .from('profiles')
+        .select('emergency_contact_status, emergency_contact_invited_at')
+        .eq('id', userId)
+        .single()
+      if (fresh) setBuddy(toBuddy(fresh))
+      if (fresh?.emergency_contact_invited_at) {
+        text = `Profile saved. We've emailed ${contactName || contactEmail} to ask if they'll be your trusted contact.`
+      }
+    }
+    setStatus({ ok: true, text })
     const keptName = contactEmail ? contactName : ''
     setSaved({
       fullName: fullName.trim(),
@@ -429,17 +448,20 @@ export default function ProfilePage() {
               )}
 
               {isStatic('ecEmail') ? (
-                <DetailRow
-                  label="Emergency contact"
-                  value={saved.ecName ? `${saved.ecName} · ${saved.ecEmail}` : saved.ecEmail}
-                  note="Emailed when you agree on a meetup, and when it's done or cancelled."
-                  onEdit={() => startEditing('ecEmail')}
-                />
+                <div className="space-y-2">
+                  <DetailRow
+                    label="Trusted contact"
+                    value={saved.ecName ? `${saved.ecName} · ${saved.ecEmail}` : saved.ecEmail}
+                    note="Once they agree, they're emailed when you agree on a meetup, and when it's done or cancelled."
+                    onEdit={() => startEditing('ecEmail')}
+                  />
+                  <BuddyStatus buddy={buddy} name={saved.ecName || saved.ecEmail} onSent={setBuddy} />
+                </div>
               ) : (
                 <fieldset className="space-y-3 rounded-xl bg-[#0E4D5C]/5 p-4">
-                  <legend className="sr-only">Emergency contact</legend>
+                  <legend className="sr-only">Trusted contact</legend>
                   <p className="flex items-center gap-2 text-sm font-semibold text-[#0E4D5C]">
-                    <ShieldAlert className="w-4 h-4" /> Emergency contact <span className="font-normal text-slate-500">(optional)</span>
+                    <ShieldAlert className="w-4 h-4" /> Trusted contact <span className="font-normal text-slate-500">(optional)</span>
                   </p>
                   <p className="text-xs text-slate-600">{WHY.emergency}</p>
                   <div className="grid sm:grid-cols-2 gap-3">
@@ -550,6 +572,63 @@ export default function ProfilePage() {
 }
 
 /** A saved detail shown as text, with an Edit button. */
+function toBuddy(row: { emergency_contact_status: string | null; emergency_contact_invited_at: string | null }): Buddy {
+  const s = row.emergency_contact_status
+  return {
+    status: s === 'pending' || s === 'agreed' || s === 'declined' ? s : null,
+    invitedAt: row.emergency_contact_invited_at,
+  }
+}
+
+/** Waiting / agreed / said no, and sending the request (again). */
+function BuddyStatus({ buddy, name, onSent }: { buddy: Buddy; name: string; onSent: (b: Buddy) => void }) {
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
+  if (!buddy.status) return null
+
+  async function send() {
+    setMessage(null)
+    setBusy(true)
+    const { error } = await createClient().rpc('send_buddy_request')
+    setBusy(false)
+    if (error) {
+      return setMessage({ ok: false, text: error.code === 'P0001' ? `${error.message}.` : 'Could not send it. Please try again.' })
+    }
+    onSent({ status: 'pending', invitedAt: new Date().toISOString() })
+    setMessage({ ok: true, text: `Sent. Ask ${name} to check their inbox (and spam).` })
+  }
+
+  const sentOn = buddy.invitedAt
+    ? new Date(buddy.invitedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
+    : null
+  return (
+    <div className="space-y-1 text-sm">
+      {buddy.status === 'agreed' && <p className="font-semibold text-green-700">✓ {name} agreed to be your trusted contact.</p>}
+      {buddy.status === 'declined' && (
+        <p className="text-red-700">{name} said no, so they won&apos;t get emails. Choose someone else with Edit.</p>
+      )}
+      {buddy.status === 'pending' && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <p className="text-amber-700">
+            {sentOn
+              ? `Waiting for ${name} to agree (asked ${sentOn}). We won't email them about meetups until they do.`
+              : `${name} hasn't been asked yet. We won't email them about meetups until they agree.`}
+          </p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={send}
+            className="px-3 py-1.5 rounded-full border border-slate-300 text-sm font-semibold text-[#0E4D5C] hover:bg-slate-50 disabled:opacity-60"
+          >
+            {busy ? 'Sending…' : sentOn ? 'Send again' : 'Send the request'}
+          </button>
+        </div>
+      )}
+      {message && <p className={message.ok ? 'text-green-700' : 'text-red-700'}>{message.text}</p>}
+    </div>
+  )
+}
+
 function DetailRow({ label, value, note, onEdit }: { label: string; value: string; note?: string; onEdit?: () => void }) {
   return (
     <div className="flex items-start justify-between gap-3">

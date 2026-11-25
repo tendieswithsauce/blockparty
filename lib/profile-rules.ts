@@ -20,9 +20,9 @@ export function optionalDetailsProblem({ homeAddress, ecName, ecEmail }: Optiona
   if (homeAddress && (homeAddress.length < 5 || homeAddress.length > 200)) {
     return 'Enter your full street address, or leave it blank.'
   }
-  if (ecName.length > 100) return "Your emergency contact's name is too long."
-  if (ecEmail && (ecEmail.length > 254 || !EMAIL_RE.test(ecEmail))) return "Check your emergency contact's email address."
-  if (ecName && !ecEmail) return "Add your emergency contact's email address."
+  if (ecName.length > 100) return "Your trusted contact's name is too long."
+  if (ecEmail && (ecEmail.length > 254 || !EMAIL_RE.test(ecEmail))) return "Check your trusted contact's email address."
+  if (ecName && !ecEmail) return "Add your trusted contact's email address."
   return null
 }
 
@@ -32,7 +32,7 @@ export const WHY = {
   address:
     "Needed only if you offer pickup at your home, or want items delivered to you. It's shown only to the other person in that order, once their payment is on hold, and hidden again when the order closes.",
   emergency:
-    "When you and the other person agree on a meetup time, we email this person where you're going and when, and again when it's done or cancelled. Let them know to expect it.",
+    "Someone who'd like to know where you are. We'll email them to ask if they agree. Once they do, whenever you agree on a meetup time we email them where you're going and when, and again when it's done or cancelled.",
   payment:
     "Needed to bid or buy. Adding it now means you can bid the moment you find something. We only place a hold when you win or buy, and you're only charged after you meet the seller and accept the item.",
 }

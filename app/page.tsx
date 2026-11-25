@@ -55,7 +55,7 @@ const SAFETY = [
   {
     icon: ShieldCheck,
     title: 'Safer meetups',
-    body: 'Suggested public meetup spots, in-app messages, and an optional emergency contact who’s told when and where you’re meeting.',
+    body: 'Suggested public meetup spots, in-app messages, and an optional trusted contact who’s told when and where you’re meeting.',
   },
   {
     icon: BadgeCheck,

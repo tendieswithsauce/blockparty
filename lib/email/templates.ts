@@ -107,20 +107,53 @@ export function welcomeEmail({ firstName, siteUrl }: { firstName: string | null;
 }
 
 /**
- * To someone a member named as their emergency contact: where and when the
- * member is meeting another member (or that it's done / cancelled).
+ * To someone a member named as their trusted contact. kind 'invite': the request
+ * to agree (button opens /buddy/<token>, where they agree or say no; nothing
+ * changes just by opening the link, so mail scanners can't agree for them).
+ * Otherwise: where and when the member is meeting someone (or that it's done /
+ * cancelled), with a link to stop.
  */
-export function safetyAlertEmail({ subject, body, toName }: { subject: string; body: string; toName: string | null }) {
+export function safetyAlertEmail({
+  kind,
+  subject,
+  body,
+  toName,
+  link,
+  ctaLabel,
+  siteUrl,
+}: {
+  kind: string
+  subject: string
+  body: string
+  toName: string | null
+  link: string | null
+  ctaLabel: string | null
+  siteUrl: string
+}) {
   const hi = toName ? `Hi ${toName},` : 'Hi,'
-  const why =
-    'You&rsquo;re getting this because a Blockparty member added you as their emergency contact. Blockparty is a local marketplace where neighbours meet to buy and sell. If you think this is a mistake, you can ignore this email.'
+  const url = link ? `${siteUrl}${link}` : null
+  const small = (html: string) => `<p style="margin:16px 0 0;font-size:13px;line-height:1.5;color:#94A3B8;">${html}</p>`
+  if (kind === 'invite' && url) {
+    const label = ctaLabel ?? 'I agree'
+    return {
+      subject,
+      html: layout({
+        heading: subject,
+        body: p(esc(hi)) + p(esc(body)),
+        cta: { label, url },
+        note: small(
+          `Don&rsquo;t know them, or would rather not? <a href="${esc(url)}" style="color:#0E4D5C;">No thanks</a>. Blockparty never shares your email address.`,
+        ),
+      }),
+      text: `${hi}\n\n${body}\n\n${label}, or say no thanks: ${url}\n`,
+    }
+  }
+  const stop = url
+    ? `You agreed to be their trusted contact. <a href="${esc(url)}" style="color:#0E4D5C;">Stop getting these emails</a>.`
+    : 'You&rsquo;re getting this because a Blockparty member named you as their trusted contact.'
   return {
     subject,
-    html: layout({
-      heading: subject,
-      body: p(esc(hi)) + p(esc(body)),
-      note: `<p style="margin:16px 0 0;font-size:13px;line-height:1.5;color:#94A3B8;">${why}</p>`,
-    }),
-    text: `${hi}\n\n${body}\n\nYou're getting this because a Blockparty member added you as their emergency contact. If you think this is a mistake, you can ignore this email.\n`,
+    html: layout({ heading: subject, body: p(esc(hi)) + p(esc(body)), note: small(stop) }),
+    text: `${hi}\n\n${body}\n\n${url ? `Stop getting these emails: ${url}` : ''}\n`,
   }
 }

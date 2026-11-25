@@ -36,7 +36,7 @@ const PROBLEMS = [
     icon: ShieldCheck,
     problem: 'Meeting strangers feels risky',
     detail: 'Anonymous profiles, carrying cash to a stranger, and nobody knowing where you went.',
-    fix: "No cash changes hands. We suggest public meetup spots like police exchange zones, can let an emergency contact know where and when you're meeting, and keep a private record of where each handoff happened. Your phone number and email are never shown, and a home address is only shared once payment is on hold.",
+    fix: "No cash changes hands. We suggest public meetup spots like police exchange zones, can let a trusted contact know where and when you're meeting, and keep a private record of where each handoff happened. Your phone number and email are never shown, and a home address is only shared once payment is on hold.",
   },
   {
     icon: CalendarClock,

@@ -3,8 +3,12 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { updateSession } from '@/lib/supabase/proxy'
 import { GATE_COOKIE, GATE_PATH, gateEnabled, hasGatePass } from '@/lib/site-gate'
 
-/** Reachable without the site password: the wall itself, the cron and Stripe's webhook (each has its own secret). */
-const GATE_EXEMPT = [GATE_PATH, '/api/cron/', '/api/stripe/webhook', '/manifest.webmanifest', '/robots.txt']
+/**
+ * Reachable without the site password: the wall itself, the cron and Stripe's
+ * webhook (each has its own secret), and the page where a trusted contact agrees
+ * (they aren't testers; the link's token is the secret).
+ */
+const GATE_EXEMPT = [GATE_PATH, '/buddy/', '/api/cron/', '/api/stripe/webhook', '/manifest.webmanifest', '/robots.txt']
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl

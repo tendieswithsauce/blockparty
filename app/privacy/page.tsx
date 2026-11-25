@@ -51,8 +51,8 @@ export default function PrivacyPage() {
                   or delivery, your home address.
                 </li>
                 <li>
-                  <strong>Emergency contact:</strong> if you add one, their name and email address. See &ldquo;Safety
-                  features&rdquo; below.
+                  <strong>Trusted contact:</strong> if you add one, their name and email address, and whether they agreed.
+                  See &ldquo;Safety features&rdquo; below.
                 </li>
                 <li>
                   <strong>Listings:</strong> titles, descriptions, photos, prices, condition, category, and how you&apos;ll
@@ -155,7 +155,7 @@ export default function PrivacyPage() {
                 </li>
               </ul>
               <p>
-                We never show your email address, phone number, full name or emergency contact to other members.
+                We never show your email address, phone number, full name or trusted contact to other members.
               </p>
             </>
           ),
@@ -166,10 +166,11 @@ export default function PrivacyPage() {
           body: (
             <>
               <p>
-                <strong>Emergency contact.</strong> If you add an emergency contact, we email them when you agree a meetup
-                time (with the time and place), and again when the handoff is completed or cancelled. Please tell your
-                contact before adding them. They can ignore or stop these emails at any time by asking you to remove them,
-                or by contacting us.
+                <strong>Trusted contact.</strong> If you add a trusted contact, we first email them once to ask if they agree;
+                that email gives your first name and display name. We send them nothing else unless they agree. Once they
+                do, we email them when you agree a meetup time (with the time and place), and again when the handoff is
+                completed or cancelled. Every email has a link to stop, and we tell you if they agree, say no or stop. Please
+                tell them before adding them.
               </p>
               <p>
                 <strong>Handoff location.</strong> The location recorded at a handoff is visible only to Blockparty
@@ -286,7 +287,7 @@ export default function PrivacyPage() {
               <ul>
                 <li>See and update most of your information on your profile.</li>
                 <li>Turn off optional emails (outbid, watchlist and saved-search alerts) on your profile.</li>
-                <li>Remove your emergency contact, home address or profile photo at any time.</li>
+                <li>Remove your trusted contact, home address or profile photo at any time.</li>
                 <li>Block a member, or report a listing, question or member.</li>
                 <li>
                   Ask us for a copy of the personal information we hold about you, to correct it, or to delete your
