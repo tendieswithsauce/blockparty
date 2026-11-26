@@ -173,7 +173,7 @@ function ReviewItem({ item, onDone }: { item: QueueItem; onDone: () => void }) {
         <p className="font-semibold">
           {item.title}{' '}
           <span className="font-normal text-slate-500">
-            · {item.price_cents !== null ? formatCents(item.price_cents) : ''} {item.listing_type === 'auction' ? 'auction' : 'set price'} ·{' '}
+            · {item.price_cents !== null ? formatCents(item.price_cents) : ''} {item.listing_type === 'auction' ? 'auction' : item.listing_type === 'free' ? 'free' : 'buy now'} ·{' '}
             {item.category} · by {item.seller_name}
           </span>
         </p>
@@ -530,7 +530,7 @@ function ReportItem({ r, onDone }: { r: ReportRow; onDone: () => void }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  async function act(action: 'dismiss' | 'handled' | 'remove_listing' | 'remove_question') {
+  async function act(action: 'dismiss' | 'handled' | 'remove_listing' | 'remove_question' | 'remove_comment') {
     setBusy(true)
     setError('')
     const { error: rpcError } = await createClient().rpc('admin_resolve_report', {
@@ -564,6 +564,7 @@ function ReportItem({ r, onDone }: { r: ReportRow; onDone: () => void }) {
         </p>
       )}
       {r.question && <p>Question: &ldquo;{r.question}&rdquo;</p>}
+      {r.comment && <p>Comment: &ldquo;{r.comment}&rdquo;</p>}
       {r.reported_user && (
         <p>
           Member:{' '}
@@ -594,6 +595,11 @@ function ReportItem({ r, onDone }: { r: ReportRow; onDone: () => void }) {
         {r.target_type === 'question' && (
           <button type="button" disabled={busy} onClick={() => act('remove_question')} className={`${btn} bg-red-600 text-white`}>
             Remove question
+          </button>
+        )}
+        {r.target_type === 'comment' && (
+          <button type="button" disabled={busy} onClick={() => act('remove_comment')} className={`${btn} bg-red-600 text-white`}>
+            Remove comment
           </button>
         )}
         <button type="button" disabled={busy} onClick={() => act('handled')} className={`${btn} bg-[#0E4D5C] text-white`}>

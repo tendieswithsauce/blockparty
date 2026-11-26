@@ -204,7 +204,7 @@ export function AdminListings() {
                   <p className="font-semibold truncate mt-0.5">{r.title}</p>
                   <p className="text-xs text-slate-500">
                     {r.price_cents !== null ? formatCents(r.price_cents) : '–'} ·{' '}
-                    {r.listing_type === 'auction' ? `auction, ${r.bid_count} bid${r.bid_count === 1 ? '' : 's'}` : 'Set Price'} · by{' '}
+                    {r.listing_type === 'auction' ? `auction, ${r.bid_count} bid${r.bid_count === 1 ? '' : 's'}` : r.listing_type === 'free' ? 'Free' : 'Buy Now'} · by{' '}
                     <Link href={`/u/${r.seller_name}`} className="underline">
                       {r.seller_name}
                     </Link>{' '}

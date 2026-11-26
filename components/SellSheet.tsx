@@ -22,8 +22,8 @@ export const LISTING_CREATED_EVENT = 'blockparty:listing-created'
 type View =
   | { kind: 'closed' }
   | { kind: 'checking' }
-  | { kind: 'payouts'; hasAccount: boolean; verifying: boolean }
-  | { kind: 'create'; areaId?: string }
+  | { kind: 'payouts'; hasAccount: boolean; verifying: boolean; areaId?: string }
+  | { kind: 'create'; areaId?: string; freeOnly?: boolean }
   | { kind: 'done'; result: ModerationResult }
 
 export function useSellSheet({ onDashboard }: { onDashboard: boolean }) {
@@ -48,6 +48,7 @@ export function useSellSheet({ onDashboard }: { onDashboard: boolean }) {
       kind: 'payouts',
       hasAccount: Boolean(status?.accountId ?? profile?.stripe_account_id),
       verifying: Boolean(status?.verifying),
+      areaId: profile?.area_id ?? undefined,
     })
   }
 
@@ -68,7 +69,7 @@ export function useSellSheet({ onDashboard }: { onDashboard: boolean }) {
           <p className="text-slate-600 text-sm">
             {view.verifying
               ? "You've sent Stripe everything they need. Verification usually takes a minute or two; try again shortly."
-              : 'Before you list an item, connect a bank account with Stripe so we can send you the money once your buyer picks it up. It takes about 5 minutes.'}
+              : 'To sell for money, connect a bank account with Stripe so we can send you the money once your buyer picks it up. It takes about 5 minutes.'}
           </p>
           <SecuredByStripe text="Your identity and bank details go straight to Stripe, not to Blockparty." />
           <div className="flex justify-end gap-3 pt-2">
@@ -77,11 +78,22 @@ export function useSellSheet({ onDashboard }: { onDashboard: boolean }) {
             </button>
             {!view.verifying && <SetUpPayoutsButton label={view.hasAccount ? 'Finish payout setup' : 'Set up payouts'} />}
           </div>
+          <div className="border-t pt-4 text-sm">
+            <p className="text-slate-600">Just giving something away? You don&apos;t need payouts for that.</p>
+            <button
+              type="button"
+              onClick={() => setView({ kind: 'create', areaId: view.areaId, freeOnly: true })}
+              className="mt-2 font-semibold text-[#2E8B57] underline"
+            >
+              List something for free
+            </button>
+          </div>
         </div>
       </div>
     ) : view.kind === 'create' ? (
       <CreateListingModal
         defaultArea={view.areaId}
+        freeOnly={view.freeOnly}
         onClose={close}
         onCreated={(result) => {
           window.dispatchEvent(new CustomEvent(LISTING_CREATED_EVENT, { detail: result }))

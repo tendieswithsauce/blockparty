@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase/server'
 import { siteUrl } from '@/lib/site-url'
 import { safeNextPath } from '@/lib/auth/redirect'
 import { afterSignIn } from '@/lib/auth/onboarding'
-import { optionalDetailsProblem, phoneProblem } from '@/lib/profile-rules'
 
 export type AuthFormState = {
   error?: string
@@ -52,22 +51,12 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
   const fullName = field(formData, 'full_name')
   const email = field(formData, 'email')
   const password = formData.get('password')
-  const areaId = field(formData, 'area_id')
-  const phone = field(formData, 'phone')
-  const homeAddress = field(formData, 'home_address')
-  const ecName = field(formData, 'ec_name')
-  const ecEmail = field(formData, 'ec_email').toLowerCase()
 
   if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) {
     return { error: 'Display names are 3–20 letters, numbers or underscores.' }
   }
   if (!fullName) return { error: 'Enter your name.' }
   if (!email) return { error: 'Enter your email.' }
-  if (!areaId) return { error: 'Choose your area.' }
-  const badPhone = phoneProblem(phone)
-  if (badPhone) return { error: badPhone }
-  const badDetails = optionalDetailsProblem({ homeAddress, ecName, ecEmail })
-  if (badDetails) return { error: badDetails }
   if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
     return { error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` }
   }
@@ -80,21 +69,11 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
     email,
     password,
     options: {
-      // Picked up by the new-user triggers into profiles. If the display name
-      // was taken in the meantime, a random one is used instead. The bp_ keys
-      // are stripped from the stored metadata (stash_signup_details()), so the
-      // address and emergency contact never land in auth.users or the session
-      // token. They only apply when an account is actually created: a repeat
-      // sign-up for an existing email can't change anyone's profile.
-      data: {
-        full_name: fullName,
-        username,
-        bp_area_id: areaId,
-        bp_phone: phone,
-        bp_home_address: homeAddress,
-        bp_ec_name: ecEmail ? ecName : '',
-        bp_ec_email: ecEmail,
-      },
+      // Picked up by the new-user trigger into profiles. If the display name
+      // was taken in the meantime, a random one is used instead. Area, phone,
+      // address and trusted contact are asked on /welcome after the first
+      // sign-in (handle_new_user still accepts the bp_ keys, unused now).
+      data: { full_name: fullName, username },
       // The email template builds its link from this ({{ .RedirectTo }}), so a
       // sign-up on the dev site confirms on the dev site. It must be in
       // Supabase's Redirect URLs list, or Supabase falls back to the Site URL.

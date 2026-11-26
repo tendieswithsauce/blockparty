@@ -16,7 +16,7 @@ import { MIN_PRICE_CENTS, PLATFORM_FEE_LABEL, sellerPayoutCents } from '@/lib/fe
 export type ManagedListing = {
   id: number
   title: string
-  listingType: 'fixed' | 'auction'
+  listingType: 'fixed' | 'auction' | 'free'
   status: string
   priceCents: number | null
   bidCount: number
@@ -47,7 +47,7 @@ export function ManageListing({
 
   const fixed = listing.listingType === 'fixed'
   const canPrice = fixed && canManage(listing)
-  const canEnd = listing.status === 'active' && (fixed || listing.bidCount === 0)
+  const canEnd = listing.status === 'active' && (listing.listingType !== 'auction' || listing.bidCount === 0)
   const canDelete = canManage(listing) && listing.bidCount === 0
 
   useEffect(() => {
@@ -212,7 +212,7 @@ export function ManageListing({
         >
           <p>
             <strong>{listing.title}</strong> comes off sale right away.{' '}
-            {fixed
+            {listing.listingType !== 'auction'
               ? 'You can put it back up any time from the Inactive tab on your dashboard.'
               : 'You can relist it later as a new auction from the Inactive tab on your dashboard.'}
           </p>

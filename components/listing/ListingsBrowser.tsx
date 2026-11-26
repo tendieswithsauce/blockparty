@@ -34,7 +34,7 @@ type Filters = {
   q: string
   category: string
   area: string
-  type: '' | 'fixed' | 'auction'
+  type: '' | 'fixed' | 'auction' | 'free'
   conditions: ListingCondition[]
   min: string
   max: string
@@ -49,7 +49,7 @@ function readFilters(params: URLSearchParams): Filters {
     q,
     category: params.get('category') ?? '',
     area: params.get('area') ?? 'all',
-    type: type === 'fixed' || type === 'auction' ? type : '',
+    type: type === 'fixed' || type === 'auction' || type === 'free' ? type : '',
     conditions: (params.get('condition') ?? '').split(',').filter(isCondition),
     min: params.get('min') ?? '',
     max: params.get('max') ?? '',
@@ -241,7 +241,8 @@ export function ListingsBrowser() {
           {(
             [
               ['', 'All'],
-              ['fixed', 'Set Price'],
+              ['fixed', 'Buy Now'],
+              ['free', 'Free'],
               ['auction', 'Auctions'],
             ] as const
           ).map(([value, label]) => (

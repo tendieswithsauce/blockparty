@@ -90,12 +90,14 @@ async function CharityContent({ slug }: { slug: string }) {
                       <p className="font-semibold line-clamp-1">{l.title}</p>
                       <p className="text-sm text-[#0E4D5C] font-bold">
                         {l.listing_type === 'auction' ? 'From ' : ''}
-                        {formatCents(l.display_price_cents ?? 0)}
+                        {l.listing_type === 'free' ? 'Free' : formatCents(l.display_price_cents ?? 0)}
                       </p>
                       <p className="text-xs text-slate-500">
                         {l.listing_type === 'auction'
                           ? `Silent auction · ${l.bid_count} ${l.bid_count === 1 ? 'bid' : 'bids'}`
-                          : 'Set Price'}
+                          : l.listing_type === 'free'
+                            ? 'Free'
+                            : 'Buy Now'}
                       </p>
                     </div>
                   </Link>

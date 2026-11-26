@@ -1578,6 +1578,22 @@ export type Database = {
         }[]
       }
       send_buddy_request: { Args: never; Returns: undefined }
+      claim_free_item: { Args: { p_handoff?: string | null; p_listing_id: number }; Returns: number }
+      listing_comments_for: {
+        Args: { p_listing_id: number }
+        Returns: {
+          author_name: string
+          body: string
+          created_at: string
+          id: number
+          is_seller: boolean
+          mine: boolean
+          parent_id: number | null
+        }[]
+      }
+      post_listing_comment: { Args: { p_body: string; p_listing_id: number; p_parent_id?: number | null }; Returns: number }
+      delete_listing_comment: { Args: { p_comment_id: number }; Returns: undefined }
+      contact_info_problem: { Args: { p_text: string }; Returns: string | null }
       safety_buddy_request: {
         Args: { p_token: string }
         Returns: { contact_name: string | null; member_name: string | null; status: string | null }[]
@@ -1628,17 +1644,23 @@ export type Database = {
           listing_status: string | null
           listing_title: string | null
           open_reports_on_user: number
+          comment: string | null
+          comment_id: number | null
           question: string | null
           question_id: number | null
           reason: string
           reported_user: string | null
           reported_user_id: string | null
           reporter: string
-          target_type: 'listing' | 'user' | 'question'
+          target_type: 'listing' | 'user' | 'question' | 'comment'
         }[]
       }
       admin_resolve_report: {
-        Args: { p_action: 'dismiss' | 'handled' | 'remove_listing' | 'remove_question'; p_note?: string | null; p_report_id: number }
+        Args: {
+          p_action: 'dismiss' | 'handled' | 'remove_listing' | 'remove_question' | 'remove_comment'
+          p_note?: string | null
+          p_report_id: number
+        }
         Returns: undefined
       }
       block_user: { Args: { p_user_id: string }; Returns: undefined }
@@ -1663,6 +1685,7 @@ export type Database = {
           p_details?: string | null
           p_listing_id?: number | null
           p_question_id?: number | null
+          p_comment_id?: number | null
           p_reason: string
           p_target_type: string
           p_user_id?: string | null
@@ -1693,7 +1716,7 @@ export type Database = {
         | "complete"
         | "inactive"
         | "incomplete"
-      listing_type: "auction" | "fixed"
+      listing_type: "auction" | "fixed" | "free"
       transaction_status:
         | "pending"
         | "authorized"
@@ -1836,7 +1859,7 @@ export const Constants = {
         "inactive",
         "incomplete",
       ],
-      listing_type: ["auction", "fixed"],
+      listing_type: ["auction", "fixed", "free"],
       transaction_status: [
         "pending",
         "authorized",

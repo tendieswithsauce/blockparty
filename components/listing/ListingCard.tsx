@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 import { areaLabel } from '@/lib/areas'
 import { categoryPath, conditionLabel, type CategoryRef } from '@/lib/categories'
 import { formatCents } from '@/lib/money'
+import { type ListingType, typeBadgeClass, typeLabel } from '@/lib/listing-type'
 
 export const LISTING_CARD_COLUMNS =
   'id, title, listing_type, condition, image_paths, display_price_cents, ends_at, has_reserve, silent, charity:charities(name), area:areas(name, city), category:categories!category_id(name, parent:parent_id(name))'
@@ -17,7 +18,7 @@ export const LISTING_CARD_COLUMNS =
 export type ListingCardData = {
   id: number
   title: string
-  listing_type: 'fixed' | 'auction'
+  listing_type: ListingType
   condition: string
   image_paths: string[]
   display_price_cents: number | null
@@ -46,11 +47,11 @@ export function ListingCard({ item }: { item: ListingCardData }) {
         )}
         <span className="absolute top-2 right-2 sm:top-3 sm:right-3 flex flex-col items-end gap-1">
           <span
-            className={`px-2.5 sm:px-3 py-1 text-[11px] sm:text-xs font-bold rounded-full shadow-sm text-white ${
-              item.listing_type === 'auction' ? 'bg-[#F26B5B]' : 'bg-[#0E4D5C]'
-            }`}
+            className={`px-2.5 sm:px-3 py-1 text-[11px] sm:text-xs font-bold rounded-full shadow-sm text-white ${typeBadgeClass(
+              item.listing_type,
+            )}`}
           >
-            {item.silent ? 'Silent auction' : item.listing_type === 'auction' ? 'Auction' : 'Set Price'}
+            {typeLabel(item.listing_type, item.silent)}
           </span>
           {item.listing_type === 'auction' && !item.has_reserve && (
             <span className="px-2.5 sm:px-3 py-1 text-[11px] sm:text-xs font-bold rounded-full shadow-sm bg-[#F4A261] text-[#1E293B]">
@@ -69,7 +70,11 @@ export function ListingCard({ item }: { item: ListingCardData }) {
         <h3 className="font-bold text-slate-900 text-sm sm:text-base truncate group-hover:text-[#0E4D5C]">{item.title}</h3>
         <p className="text-sm text-slate-700">
           {item.silent ? 'Bids from ' : item.listing_type === 'auction' ? 'Current bid ' : ''}
-          <span className="font-extrabold text-slate-900">{formatCents(item.display_price_cents ?? 0)}</span>
+          {item.listing_type === 'free' ? (
+            <span className="font-extrabold text-[#2E8B57]">Free</span>
+          ) : (
+            <span className="font-extrabold text-slate-900">{formatCents(item.display_price_cents ?? 0)}</span>
+          )}
           {item.listing_type === 'auction' && item.has_reserve && !item.silent && <span className="text-xs text-slate-500"> · reserve</span>}
         </p>
         <p className="text-xs text-slate-500 flex items-center gap-1 truncate" title={categoryPath(item.category) ?? undefined}>

@@ -24,7 +24,7 @@ export default function ListingsPage() {
               Treasures Around You
             </h1>
             <p className="text-slate-500 text-sm mt-1">
-              Browse geo-local listings openly. Create an account when you&apos;re ready to bid or buy.
+              See what your neighbours are selling. Create a free account when you&apos;re ready to buy or bid.
             </p>
           </div>
 

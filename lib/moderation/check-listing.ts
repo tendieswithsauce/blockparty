@@ -1,26 +1,30 @@
 // lib/moderation/check-listing.ts
-// Checks a new or edited listing with Claude before it goes public.
+// Checks a new or edited listing with Google Gemini before it goes public.
 // Clear listings are approved right away; anything that looks prohibited or
 // offensive is held (review_status stays 'pending') for an admin to decide.
-// Server-only. Env: ANTHROPIC_API_KEY. Without it, listings are approved
+// Server-only. Env: GEMINI_API_KEY. Without it, listings are approved
 // unchecked so the site keeps working.
 import 'server-only'
-import Anthropic from '@anthropic-ai/sdk'
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
+import { ApiError, GoogleGenAI, ThinkingLevel, type Part } from '@google/genai'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { conditionLabel } from '@/lib/categories'
 
-// Haiku: a rules check on one listing doesn't need a bigger model, and it's
-// the cheapest per listing (well under a tenth of a cent).
-const MODEL = 'claude-haiku-5-5'
+// Flash-Lite: a rules check on one listing doesn't need a bigger model, and
+// it's the cheapest per listing (well under a tenth of a cent). Stable model.
+const MODEL = 'gemini-3.5-flash-lite'
 const MAX_PHOTOS = 4
+// Photos are at most 5 MB each (the bucket limit); Gemini takes up to 20 MB a request.
+const MAX_PHOTO_BYTES = 4.5 * 1024 * 1024
 
 const Verdict = z.object({
   decision: z.enum(['approve', 'review']),
   // One plain sentence the seller will see when the listing is held.
   reason: z.string(),
 })
+// The JSON Schema Gemini fills in (without the $schema line).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const { $schema: _schemaUri, ...VERDICT_SCHEMA } = z.toJSONSchema(Verdict)
 
 const SYSTEM = `You review listings for Blockparty, a local second-hand marketplace in Canada where neighbours buy and sell household items (up to $1,000) and meet in person at public spots to hand them over.
 
@@ -60,7 +64,7 @@ export async function checkListing(listingId: number): Promise<ModerationResult>
   if (!listing || listing.review_status !== 'pending' || listing.moderation_checked_at) return 'skipped'
 
   const now = new Date().toISOString()
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.GEMINI_API_KEY) {
     await admin
       .from('listings')
       .update({ review_status: 'approved', moderated_by: 'unchecked', moderation_checked_at: now })
@@ -77,10 +81,7 @@ export async function checkListing(listingId: number): Promise<ModerationResult>
     .eq('id', listingId)
 
   const category = listing.category as unknown as { name: string; parent: { name: string } | null } | null
-  const photos = (listing.image_paths ?? []).slice(0, MAX_PHOTOS).map((path) => ({
-    type: 'image' as const,
-    source: { type: 'url' as const, url: admin.storage.from('listing-photos').getPublicUrl(path).data.publicUrl },
-  }))
+  const photoPaths = (listing.image_paths ?? []).slice(0, MAX_PHOTOS)
   // Seller text can't close our tags and pose as instructions: escape it.
   // (Category, condition and format come from fixed lists, not the seller.)
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -88,42 +89,61 @@ export async function checkListing(listingId: number): Promise<ModerationResult>
     `<title>${esc(listing.title)}</title>`,
     `<category>${category ? (category.parent ? `${category.parent.name} > ${category.name}` : category.name) : 'unknown'}</category>`,
     `<condition>${conditionLabel(listing.condition) ?? listing.condition}</condition>`,
-    `<format>${listing.listing_type === 'auction' ? 'auction' : 'set price'}, $${((listing.display_price_cents ?? 0) / 100).toFixed(2)}</format>`,
+    listing.listing_type === 'free'
+      ? '<format>free (given away, no payment)</format>'
+      : `<format>${listing.listing_type === 'auction' ? 'auction' : 'buy now'}, $${((listing.display_price_cents ?? 0) / 100).toFixed(2)}</format>`,
     `<description>${listing.description ? esc(listing.description) : '(none)'}</description>`,
-    `<photos>${photos.length} attached above</photos>`,
+    `<photos>${photoPaths.length} attached above</photos>`,
   ].join('\n')
 
   let verdict: z.infer<typeof Verdict>
   try {
-    const client = new Anthropic()
-    const response = await client.messages.parse({
+    // Gemini doesn't fetch our photo URLs itself: send the bytes inline.
+    const photos: Part[] = await Promise.all(
+      photoPaths.map(async (path) => {
+        const { data, error } = await admin.storage.from('listing-photos').download(path)
+        if (error || !data) throw new Error(`photo download failed: ${path}`)
+        if (data.size > MAX_PHOTO_BYTES) throw new Error(`photo too large: ${path}`)
+        const bytes = Buffer.from(await data.arrayBuffer())
+        return { inlineData: { mimeType: data.type || 'image/jpeg', data: bytes.toString('base64') } }
+      }),
+    )
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+    const response = await ai.models.generateContent({
       model: MODEL,
-      // Room for some thinking before the short verdict.
-      max_tokens: 2000,
-      system: SYSTEM,
-      output_config: { effort: 'low', format: zodOutputFormat(Verdict) },
-      messages: [
+      contents: [
         {
           role: 'user',
-          content: [...photos, { type: 'text', text: `Review this listing.\n\n<listing>\n${details}\n</listing>` }],
+          parts: [...photos, { text: `Review this listing.\n\n<listing>\n${details}\n</listing>` }],
         },
       ],
+      config: {
+        systemInstruction: SYSTEM,
+        responseMimeType: 'application/json',
+        responseJsonSchema: VERDICT_SCHEMA,
+        // A little thinking before the short verdict.
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+        maxOutputTokens: 2000,
+      },
     })
-    // A safety refusal (no automatic fallback on Haiku) goes to a person.
-    if (response.stop_reason === 'refusal') {
+    const blocked = response.promptFeedback?.blockReason
+    const finish = response.candidates?.[0]?.finishReason
+    const parsed = response.text ? Verdict.safeParse(JSON.parse(response.text)) : null
+    if (blocked || (!parsed?.success && finish && finish !== 'STOP' && finish !== 'MAX_TOKENS')) {
+      // Gemini's own safety filters stopped it (SAFETY, PROHIBITED_CONTENT, …): a person decides.
       verdict = { decision: 'review', reason: 'Our automatic check needs a person to look at this listing.' }
-    } else if (!response.parsed_output) {
-      throw new Error(`no verdict (stop_reason ${response.stop_reason})`)
+    } else if (!parsed?.success) {
+      throw new Error(`no verdict (finishReason ${finish ?? 'none'})`)
     } else {
-      verdict = response.parsed_output
+      verdict = parsed.data
     }
   } catch (err) {
-    // A photo URL Claude couldn't fetch, a rate limit, an outage: leave it
-    // pending; the cron route retries (and queues it for an admin after 3).
+    // A photo we couldn't read, a rate limit, an outage: leave it pending;
+    // the cron route retries (and queues it for an admin after 3).
     // Fixed message first, details after: never build the first argument
     // (a format string for console.error) from data.
-    if (err instanceof Anthropic.APIError) {
-      console.error('checkListing: Claude API error', { listingId, status: err.status, message: err.message })
+    if (err instanceof ApiError) {
+      console.error('checkListing: Gemini API error', { listingId, status: err.status, message: err.message })
     } else {
       console.error('checkListing failed', { listingId }, err)
     }

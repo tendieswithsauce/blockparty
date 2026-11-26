@@ -59,7 +59,8 @@ export default function PrivacyPage() {
                   hand the item over.
                 </li>
                 <li>
-                  <strong>Activity on the marketplace:</strong> bids, purchases, questions and answers on listings, messages
+                  <strong>Activity on the marketplace:</strong> bids, purchases, free items you claim, questions, answers and
+                  comments on listings, messages
                   with the other party to an order, meetup proposals, reviews, reports and blocks, saved searches, and items
                   you watch.
                 </li>
@@ -142,7 +143,8 @@ export default function PrivacyPage() {
               <ul>
                 <li>
                   <strong>Anyone</strong> can see your username, profile photo, the month you joined, your rating and
-                  reviews, your number of sales and purchases, your active listings, and questions and answers on listings.
+                  reviews, your number of sales and purchases, your active listings, questions and answers on listings, and
+                  comments you post on listings (with your username).
                 </li>
                 <li>
                   <strong>Bids</strong> on auctions show the bidder&apos;s username and amount; bids in charity silent
@@ -197,7 +199,7 @@ export default function PrivacyPage() {
                     <li>Vercel: website hosting and error logs.</li>
                     <li>Stripe: card payments, seller identity verification and payouts.</li>
                     <li>Resend: sending email.</li>
-                    <li>Anthropic: automated review of listing text and photos before they go live.</li>
+                    <li>Google (Gemini API): automated review of listing text and photos before they go live.</li>
                     <li>Google: sign-in, if you choose &ldquo;Continue with Google&rdquo;.</li>
                   </ul>
                 </li>

@@ -75,7 +75,7 @@ export default function TermsPage() {
               <ul>
                 <li>
                   To sell, you must first set up payouts with Stripe, our payment provider, and agree to Stripe&apos;s
-                  Connected Account Agreement.
+                  Connected Account Agreement. You don&apos;t need payouts to give an item away for free.
                 </li>
                 <li>
                   You may list only items you own and have the right to sell, located in your area, priced from{' '}
@@ -134,6 +134,14 @@ export default function TermsPage() {
                   within 24 hours, you&apos;ve bought it at that price. If an offer is declined, withdrawn or expires, the
                   hold is released. You can make up to 3 offers per item, one at a time. Sellers may have offers below an
                   amount they choose declined automatically.
+                </li>
+                <li>
+                  <strong>Free items.</strong> Some items are given away. The first member to claim one gets it; there&apos;s
+                  no payment and no fee. The handoff works like a purchase (you agree a time in the app, and the giver enters
+                  your handoff code), and the same rules apply: no-shows get strikes, cancelling counts toward the
+                  cancellation limit, and you can have 2 free items claimed but not yet picked up at a time. Free items are
+                  handed over at a meetup or picked up, not delivered. People giving items away may not have verified their
+                  identity with Stripe.
                 </li>
                 <li>
                   At the handoff, inspect the item. If it&apos;s as described, show the seller your handoff code. When the
@@ -274,7 +282,11 @@ export default function TermsPage() {
                 </li>
               </ul>
               <p>
-                You can report listings, questions and members, and block members. We review reports, and may remove content,
+                Comments on listings are public. Don&apos;t post phone numbers, email addresses or links, or use comments to
+                arrange a deal or payment outside Blockparty.
+              </p>
+              <p>
+                You can report listings, questions, comments and members, and block members. We review reports, and may remove content,
                 issue warnings or strikes, or suspend or close accounts.
               </p>
             </>

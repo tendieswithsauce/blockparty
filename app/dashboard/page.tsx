@@ -39,7 +39,7 @@ import { SecuredByStripe, StripeBadge } from '@/components/StripeBadge'
 type MyListing = {
   id: number
   title: string
-  listing_type: 'fixed' | 'auction'
+  listing_type: 'fixed' | 'auction' | 'free'
   status: string
   image_paths: string[]
   buy_now_price_cents: number | null
@@ -63,7 +63,7 @@ type Watched = {
   listing: {
     id: number
     title: string
-    listing_type: 'fixed' | 'auction'
+    listing_type: 'fixed' | 'auction' | 'free'
     status: string
     buy_now_price_cents: number | null
     display_price_cents: number | null
@@ -159,6 +159,7 @@ function createdNotice(result: ModerationResult): { kind: 'success' | 'info'; te
 }
 
 function listingPrice(l: MyListing) {
+  if (l.listing_type === 'free') return 'Free'
   if (l.listing_type === 'fixed') return formatCents(l.buy_now_price_cents ?? 0)
   return formatCents(l.current_bid_cents ?? l.starting_price_cents ?? 0)
 }
@@ -168,6 +169,8 @@ export default function DashboardPage() {
   const [payouts, setPayouts] = useState<PayoutStatus | null | undefined>(undefined)
   const [showModal, setShowModal] = useState(false)
   const [showPayoutPrompt, setShowPayoutPrompt] = useState(false)
+  // Opened from the payout prompt: no payouts yet, so only a free listing.
+  const [freeOnly, setFreeOnly] = useState(false)
   const [converting, setConverting] = useState<MyListing | null>(null)
   const [listingView, setListingView] = useState<ListingTab>('active')
   const [relisting, setRelisting] = useState<number | null>(null)
@@ -333,6 +336,7 @@ export default function DashboardPage() {
   const payoutsReady = payouts?.ready === true
 
   function onCreateClick() {
+    setFreeOnly(false)
     if (payoutsReady) setShowModal(true)
     else setShowPayoutPrompt(true)
   }
@@ -618,7 +622,9 @@ export default function DashboardPage() {
                       <p className="text-xs text-slate-500 mt-1">
                         {l.listing_type === 'auction'
                           ? `${l.bid_count} ${l.bid_count === 1 ? 'bid' : 'bids'}${l.ends_at ? ` · ${live ? 'ends' : 'ended'} ${new Date(l.ends_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}` : ''}${l.reserve ? ` · reserve ${formatCents(l.reserve.reserve_cents)}${l.reserve_met ? ' (met)' : ''}` : ' · no reserve'}`
-                          : 'Set Price'}
+                          : l.listing_type === 'free'
+                            ? 'Free'
+                            : 'Buy Now'}
                         {l.watch_count > 0 && ` · ${l.watch_count} watching`}
                       </p>
                       {l.listing_type === 'fixed' && live && !l.converted_at && (
@@ -630,7 +636,7 @@ export default function DashboardPage() {
                           <Gavel className="w-4 h-4" /> Switch to auction
                         </button>
                       )}
-                      {l.listing_type === 'fixed' && l.status === 'inactive' && l.review_status !== 'rejected' && (
+                      {l.listing_type !== 'auction' && l.status === 'inactive' && l.review_status !== 'rejected' && (
                         <button
                           type="button"
                           onClick={() => relist(l)}
@@ -777,9 +783,9 @@ export default function DashboardPage() {
                   <span className="shrink-0 flex items-center gap-3">
                     {w.listing?.status === 'active' && (
                       <span>
-                        {formatCents(w.listing.display_price_cents ?? 0)}
+                        {w.listing.listing_type === 'free' ? 'Free' : formatCents(w.listing.display_price_cents ?? 0)}
                         <span className="ml-2 text-xs font-semibold text-slate-500">
-                          {w.listing.listing_type === 'auction' ? 'Auction' : 'Set Price'}
+                          {w.listing.listing_type === 'auction' ? 'Auction' : w.listing.listing_type === 'free' ? 'Free' : 'Buy Now'}
                         </span>
                       </span>
                     )}
@@ -809,15 +815,29 @@ export default function DashboardPage() {
             <Landmark className="w-8 h-8 text-[#0E4D5C]" />
             <h2 className="text-xl font-bold">Set up payouts first</h2>
             <p className="text-slate-600 text-sm">
-              Before you list an item, connect a bank account with Stripe so we can send you the money once your buyer picks it up.
+              To sell for money, connect a bank account with Stripe so we can send you the money once your buyer picks it up.
               It takes about 5 minutes.
             </p>
             <SecuredByStripe text="Your identity and bank details go straight to Stripe, not to Blockparty." />
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex flex-wrap justify-end gap-3 pt-2">
               <button onClick={() => setShowPayoutPrompt(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">
                 Not now
               </button>
               <SetUpPayoutsButton label={payouts?.accountId ? 'Finish payout setup' : 'Set up payouts'} />
+            </div>
+            <div className="border-t pt-4 text-sm">
+              <p className="text-slate-600">Just giving something away? You don&apos;t need payouts for that.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPayoutPrompt(false)
+                  setFreeOnly(true)
+                  setShowModal(true)
+                }}
+                className="mt-2 font-semibold text-[#2E8B57] underline"
+              >
+                List something for free
+              </button>
             </div>
           </div>
         </div>
@@ -862,6 +882,7 @@ export default function DashboardPage() {
       {showModal && (
         <CreateListingModal
           defaultArea={data?.areaId ?? undefined}
+          freeOnly={freeOnly}
           onClose={() => setShowModal(false)}
           onCreated={(result) => {
             setShowModal(false)
@@ -898,7 +919,9 @@ function OrderRow({ order, role }: { order: MyOrder; role: 'buyer' | 'seller' })
           <span className="text-xs text-slate-500">{areaLabel(order.listing?.area)}</span>
         </span>
         <span className="shrink-0 text-right">
-          {formatCents(role === 'seller' ? order.amount_cents - order.platform_fee_cents : order.amount_cents)}
+          {order.amount_cents === 0
+            ? 'Free'
+            : formatCents(role === 'seller' ? order.amount_cents - order.platform_fee_cents : order.amount_cents)}
           <span className={`block text-xs font-semibold ${next.action ? 'text-[#F26B5B]' : 'text-[#0E4D5C]'}`}>
             {next.action && '● '}
             {next.text}

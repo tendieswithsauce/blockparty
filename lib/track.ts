@@ -59,7 +59,7 @@ export type TrackedSearch = {
   query: string
   categoryId: string
   areaKey: string
-  listingType: '' | 'fixed' | 'auction'
+  listingType: '' | 'fixed' | 'auction' | 'free'
   conditions: ListingCondition[]
   minCents: number | null
   maxCents: number | null

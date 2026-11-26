@@ -98,7 +98,7 @@ export function welcomeEmail({ firstName, siteUrl }: { firstName: string | null;
       heading: hi,
       body:
         p("Your account is confirmed. Blockparty is your neighbourhood marketplace: buy, bid and sell with people nearby, meet at a safe public spot, and only pay once you've checked the item.") +
-        p('<strong>To buy or bid:</strong> add a payment method. When you win an auction or buy a set-price item we hold the amount on your card, and only charge it once you&rsquo;ve met the seller and accepted the item.') +
+        p('<strong>To buy or bid:</strong> add a payment method. When you win an auction or use Buy Now we hold the amount on your card, and only charge it once you&rsquo;ve met the seller and accepted the item.') +
         p('<strong>To sell:</strong> set up payouts with Stripe, then list your first item in a couple of minutes.'),
       cta: { label: 'Go to my dashboard', url: `${siteUrl}/dashboard` },
     }),

@@ -1,5 +1,5 @@
 // components/ReportDialog.tsx
-// Report a listing, a member or a Q&A question to Blockparty staff.
+// Report a listing, a member, a Q&A question or a comment to Blockparty staff.
 'use client'
 
 import { useState } from 'react'
@@ -11,6 +11,7 @@ export type ReportTarget =
   | { type: 'listing'; listingId: number; label: string }
   | { type: 'user'; userId: string; label: string }
   | { type: 'question'; questionId: number; label: string }
+  | { type: 'comment'; commentId: number; label: string }
 
 const REASONS: Record<ReportTarget['type'], [string, string][]> = {
   listing: [
@@ -37,6 +38,14 @@ const REASONS: Record<ReportTarget['type'], [string, string][]> = {
     ['spam', 'Spam'],
     ['other', 'Something else'],
   ],
+  comment: [
+    ['harassment', 'Harassment or threats'],
+    ['offensive', 'Offensive or inappropriate'],
+    ['off_platform', 'Asks to pay or talk outside Blockparty'],
+    ['scam', 'Scam or fraud'],
+    ['spam', 'Spam'],
+    ['other', 'Something else'],
+  ],
 }
 
 export function ReportDialog({ target, onClose }: { target: ReportTarget; onClose: () => void }) {
@@ -58,6 +67,7 @@ export function ReportDialog({ target, onClose }: { target: ReportTarget; onClos
       p_listing_id: target.type === 'listing' ? target.listingId : null,
       p_user_id: target.type === 'user' ? target.userId : null,
       p_question_id: target.type === 'question' ? target.questionId : null,
+      p_comment_id: target.type === 'comment' ? target.commentId : null,
     })
     setBusy(false)
     if (rpcError) return setError(rpcError.code === 'P0001' ? `${rpcError.message}.` : 'Something went wrong. Please try again.')

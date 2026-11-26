@@ -19,7 +19,7 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 
 | Function | Args | Returns | Callable by | Security | Purpose |
 |---|---|---|---|---|---|
-| `create_listing` | title, description, listing_type, area_id, category_id, condition, image_paths[], price_cents, duration_days, reserve_cents, offers_meetup, offers_pickup, delivery_fee_cents, delivery_km, accepts_offers, offer_floor_cents | bigint (listing id) | auth, service | invoker | Create a listing (fixed, auction or silent). A Set Price listing can be open to offers, with an optional amount below which offers are declined automatically. |
+| `create_listing` | title, description, listing_type, area_id, category_id, condition, image_paths[], price_cents, duration_days, reserve_cents, offers_meetup, offers_pickup, delivery_fee_cents, delivery_km, accepts_offers, offer_floor_cents | bigint (listing id) | auth, service | invoker | Create a listing (fixed, auction, silent or free). A Buy Now listing can be open to offers, with an optional amount below which offers are declined automatically. A free listing has no price, no offers and no delivery, and doesn't need payouts set up (the insert rule allows it). |
 | `set_listing_offers` | listing_id, accepts, floor_cents | void | auth, service | definer | Seller makes a Set Price listing firm or open to offers, and sets or clears the automatic decline amount (listing_offer_floors, never readable by members). |
 | `my_listing_offer_settings` | listing_id | table (accepts_offers, floor_cents) | auth, service | definer | The seller's own offer settings for a listing. |
 | `convert_to_auction` | listing_id, starting_price_cents, duration_days, reserve_cents | void | auth, service | definer | Turn an unsold fixed-price listing into an auction. |
@@ -36,6 +36,7 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | Function | Args | Returns | Callable by | Security | Purpose |
 |---|---|---|---|---|---|
 | `begin_purchase` | listing_id, buyer_id, fee_bps, min_fee_cents, handoff | transactions | service | definer | Starts a Buy Now order. |
+| `claim_free_item` | listing_id, handoff (meetup / pickup) | bigint (transaction id) | auth, service | definer | Claims a free item: first come, first served, no card. Creates a $0 order and sets it authorized (handoff code, 5-day deadline, notices) so it runs like any other order; the seller completes it with the claimer's code (completeHandoff skips Stripe). Same strike, cancellation and block rules as a purchase; 2 unfinished free claims at a time. |
 | `place_bid` | listing_id, amount_cents, handoff | bids | auth, service | definer | Places a bid; extends the auction 2 min if it lands in the last 2. |
 | `close_auction` | listing_id, fee_bps, min_fee_cents | transactions | service | definer | Closes an ended auction and creates a pending order with confirm_by = 24 hours, and tells the winner (confirm and pay) and the seller. Skips blocked bidders and bidders whose order was cancelled, so it also hands the item to the next bidder. |
 | `cancel_auction_win` | transaction_id, buyer_id, reason (win_declined / win_not_confirmed) | text (payment intent to release) | service | definer | The winner passes (buyer_id given) or their 24 hours ran out (buyer_id null, only after confirm_by). Counts as a buyer cancellation; the listing goes back to active for the next bidder. |
@@ -50,7 +51,7 @@ Functions are called from the app with `supabase.rpc('name', { p_arg: ... })`.
 | `is_free_extenuating` | transactions row | boolean | service | definer | Is this a seller's 'extenuating' cancel with no other one in the 90 days before it (so it doesn't count toward the limit)? |
 | `my_free_extenuating` | | boolean | auth, service | definer | Would the caller's next 'extenuating' cancel be free (none in the last 90 days)? |
 | `passes_to_next_bidder` | transactions row | boolean | (internal) | invoker | Did the buyer back out (buyer cancelled, or seller reported a buyer no-show)? |
-| `relist_listing` | listing_id | void | auth, service | definer | Seller puts a paused Set Price listing back up. |
+| `relist_listing` | listing_id | void | auth, service | definer | Seller puts a paused Buy Now or free listing back up. |
 | `end_my_listing` | listing_id | void | auth, service | definer | Seller takes a listing off sale (inactive). Auctions only before any bids; an ended auction can then be relisted. |
 | `delete_my_listing` | listing_id | text[] | auth, service | definer | Seller deletes a listing that never had an order or a bid; returns photo paths no other listing uses (the app removes them from the seller's folder). |
 | `set_listing_price` | listing_id, price_cents | void | auth, service | definer | Seller changes a Set Price listing's price ($10–$1,000, no open order). Watchers get the existing price-drop alert. Members can no longer update listings directly; every change goes through a function. |
@@ -135,6 +136,17 @@ Every offer is held on the buyer's card (3D Secure) before the seller sees it; t
 | `remove_question` | question_id | void | auth, service | definer | Asker withdraws or seller removes. |
 | `listing_questions_for` | listing_id | table | anon, auth, service | definer | Answered questions plus the caller's own pending ones. |
 
+## Comments
+
+Public comments under a listing, separate from Q&A. No private messages exist, so comments can't carry contact details.
+
+| Function | Args | Returns | Callable by | Security | Purpose |
+|---|---|---|---|---|---|
+| `listing_comments_for` | listing_id | table (id, parent_id, body, created_at, author_name, is_seller, mine) | anon, auth, service | definer | Visible comments, oldest first (hidden ones, replies to hidden ones, and comments from members blocked either way are left out). |
+| `post_listing_comment` | listing_id, body, parent_id | bigint | auth, service | definer | Post a comment or a reply (one level; a reply to a reply joins the thread). 2–500 characters, no contact details, 10 per listing per hour and 50 a day. Tells the seller (once an hour per listing) and the person replied to. |
+| `delete_listing_comment` | comment_id | void | auth, service | definer | The author deletes their own comment. |
+| `contact_info_problem` | text | text (why, or null) | anon, auth, service | invoker | Spots phone numbers, email addresses and links. |
+
 ## Report and block
 
 | Function | Args | Returns | Callable by | Security | Purpose |
@@ -144,7 +156,7 @@ Every offer is held on the buyer's card (3D Secure) before the seller sees it; t
 | `is_blocked_with` | other | table (blocked, by_me) | anon, auth, service | definer | Block status between caller and another member. |
 | `blocked_with_me` | other | boolean | anon, auth, service | definer | Helper used by `search_listings` and similar. |
 | `blocked_between` | a, b | boolean | service | definer | Internal block check. |
-| `report_content` | target_type, reason, details, listing_id, user_id, question_id | void | auth, service | definer | File a report. |
+| `report_content` | target_type (listing / user / question / comment), reason, details, listing_id, user_id, question_id, comment_id | void | auth, service | definer | File a report. |
 | `report_reason_text` | reason | text | anon, auth, service | invoker | Human label for a report reason. |
 
 ## Tester feedback
@@ -184,8 +196,8 @@ Every offer is held on the buyer's card (3D Secure) before the seller sees it; t
 | `admin_set_charity_fee_cap` | cents | void | auth, service | Fee-free allowance for charities. |
 | `admin_strikes` | | table | auth, service | Strikes list. |
 | `admin_void_strike` | strike_id | void | auth, service | Void a strike. |
-| `admin_reports` | | table | auth, service | Open reports. |
-| `admin_resolve_report` | report_id, action, note | void | auth, service | dismiss / handled / remove_listing / remove_question. |
+| `admin_reports` | | table | auth, service | Open reports (with the reported question or comment text). |
+| `admin_resolve_report` | report_id, action, note | void | auth, service | dismiss / handled / remove_listing / remove_question / remove_comment. |
 | `admin_handoff_locations` | transaction_id | table | auth, service | Handoff GPS for one order. |
 | `admin_feedback` | | table | auth, service | Tester feedback from the dev site's Feedback button, open items first. |
 | `admin_set_feedback_status` | id, status, note | void | auth, service | Mark tester feedback done (or new again), with an optional note. |
@@ -219,7 +231,7 @@ Every offer is held on the buyer's card (3D Secure) before the seller sees it; t
 | `assign_bidder_no` | bids | Numbers bidders per auction (1, 2, …) in order of first bid; a repeat bidder keeps their number. |
 | `set_updated_at` | many tables | Maintains `updated_at`. |
 | `listing_search_vector` | listings | Maintains the full-text search column. |
-| `listing_handoff_check` | listings | Requires at least one handoff method; validates delivery fee and radius. |
+| `listing_handoff_check` | listings | Requires at least one handoff method; validates delivery fee and radius; free items can't offer delivery. |
 | `listing_reserve_set`, `listing_reserve_recheck`, `listing_needs_recheck` | listings | Reserve price and re-moderation handling. |
 | `require_approved_listing` | listings | Blocks unapproved listings from going live. |
 | `listing_charity`, `charity_fee_waiver` | listings, transactions | Charity link and fee waiver. |
@@ -228,7 +240,7 @@ Every offer is held on the buyer's card (3D Secure) before the seller sees it; t
 | `watchlist_count` | watchlist | Maintains watcher counts. |
 | `on_bid_placed` | bids | Outbid and bid notices. |
 | `enforce_no_block_bid`, `enforce_no_block_purchase`, `enforce_no_block_question` | bids, transactions, listing_questions | Reject activity between blocked members. |
-| `on_transaction_authorized`, `on_transaction_notify`, `on_transaction_safety_alert` | transactions | Status notices and trusted contact alerts (only to a trusted contact who agreed). |
+| `on_transaction_authorized`, `on_transaction_notify`, `on_transaction_safety_alert` | transactions | Status notices ("claimed" and "handed over" for free items) and trusted contact alerts (only to a trusted contact who agreed). |
 | `on_order_message` | order_messages | Message notices, including "shared their location". |
-| `on_no_show_reported`, `enforce_strike_limit` | no-shows; bids, offers, listings and Set Price orders | Strikes. Before a bid, offer, listing or purchase: blocks suspended members, 3 strikes, 3 cancellations in 30 days, and buying from or bidding on an account that shared your card. |
+| `on_no_show_reported`, `enforce_strike_limit` | no-shows; bids, offers, listings, and Buy Now and free orders | Strikes. Before a bid, offer, listing or purchase: blocks suspended members, 3 strikes, 3 cancellations in 30 days, and buying from or bidding on an account that shared your card. |
 | `on_review`, `on_listing_review`, `on_order_completed_review_request` | reviews, transactions | Rating totals and review requests. |

@@ -65,7 +65,7 @@ type Order = {
     id: number
     title: string
     image_paths: string[]
-    listing_type: 'fixed' | 'auction'
+    listing_type: 'fixed' | 'auction' | 'free'
     status: string
     area: { name: string; city: string; timezone: string } | null
   } | null
@@ -206,6 +206,8 @@ export function OrderView({ id }: { id: number }) {
     ? createClient().storage.from('listing-photos').getPublicUrl(order.listing.image_paths[0]).data.publicUrl
     : null
   const payoutCents = order.amount_cents - order.platform_fee_cents
+  // A free item: no card, no payout. Same meetup, code and reviews.
+  const free = order.listing?.listing_type === 'free'
   // Accepted offers were agreed by both sides, so there's no undo window.
   const undoUntil =
     order.listing?.listing_type === 'fixed' && !order.offer_id && order.authorized_at
@@ -224,7 +226,14 @@ export function OrderView({ id }: { id: number }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-              Order #{order.id} · {role === 'buyer' ? `Buying from ${names.seller}` : `Selling to ${names.buyer}`}
+              Order #{order.id} ·{' '}
+              {free
+                ? role === 'buyer'
+                  ? `Free from ${names.seller}`
+                  : `Giving to ${names.buyer}`
+                : role === 'buyer'
+                  ? `Buying from ${names.seller}`
+                  : `Selling to ${names.buyer}`}
             </p>
             <SafetyMenu
               userId={role === 'buyer' ? order.seller_id : order.buyer_id}
@@ -236,9 +245,15 @@ export function OrderView({ id }: { id: number }) {
             {order.listing?.title ?? 'Item'}
           </Link>
           <p className="text-sm text-slate-600">
-            {formatCents(order.amount_cents)}
-            {order.delivery_fee_cents > 0 && <> (incl. {formatCents(order.delivery_fee_cents)} delivery)</>}
-            {role === 'seller' && <> · you get {formatCents(payoutCents)} after the fee</>}
+            {free ? (
+              <span className="font-semibold text-[#2E8B57]">Free</span>
+            ) : (
+              <>
+                {formatCents(order.amount_cents)}
+                {order.delivery_fee_cents > 0 && <> (incl. {formatCents(order.delivery_fee_cents)} delivery)</>}
+                {role === 'seller' && <> · you get {formatCents(payoutCents)} after the fee</>}
+              </>
+            )}
             {' · '}
             {areaLabel(order.listing?.area)}
           </p>
@@ -248,12 +263,16 @@ export function OrderView({ id }: { id: number }) {
       {order.status === 'completed' ? (
         <div className={`${card} bg-green-50 border-green-200`}>
           <p className="flex items-center gap-2 font-bold text-green-800">
-            <CheckCircle2 className="w-5 h-5" /> Sale complete
+            <CheckCircle2 className="w-5 h-5" /> {free ? 'Handed over' : 'Sale complete'}
           </p>
           <p className="text-sm text-green-800">
-            {role === 'buyer'
-              ? `Your card was charged ${formatCents(order.amount_cents)}. Enjoy it!`
-              : payoutMessage(order, payoutCents, tz, now)}
+            {free
+              ? role === 'buyer'
+                ? 'Enjoy it!'
+                : 'Thanks for giving it a new home.'
+              : role === 'buyer'
+                ? `Your card was charged ${formatCents(order.amount_cents)}. Enjoy it!`
+                : payoutMessage(order, payoutCents, tz, now)}
           </p>
           {order.refunded_cents > 0 && (
             <p className="text-sm text-green-800">
@@ -273,7 +292,7 @@ export function OrderView({ id }: { id: number }) {
           </p>
           <p className="text-sm text-slate-600">
             {cancelReasonLabel(order.cancel_reason)}.{' '}
-            {role === 'buyer' ? 'The hold on your card was released; you were not charged.' : 'The buyer was not charged.'}
+            {free ? '' : role === 'buyer' ? 'The hold on your card was released; you were not charged.' : 'The buyer was not charged.'}
           </p>
           {order.cancel_note && (
             <p className="text-sm text-slate-600 bg-slate-50 rounded-xl p-3">
@@ -307,7 +326,7 @@ export function OrderView({ id }: { id: number }) {
                 <>
                   <p className="font-semibold">Sold! Waiting a few minutes before it&apos;s final</p>
                   <p className="text-sm text-slate-600">
-                    Buyers can cancel a set-price purchase for {BUY_NOW_CANCEL_WINDOW_SECONDS / 60} minutes. You can arrange the
+                    Buyers can cancel a Buy Now purchase for {BUY_NOW_CANCEL_WINDOW_SECONDS / 60} minutes. You can arrange the
                     handoff once that&apos;s passed.
                   </p>
                 </>
@@ -336,9 +355,9 @@ export function OrderView({ id }: { id: number }) {
 
           {order.meetup_at &&
             (role === 'buyer' ? (
-              <BuyerCode orderId={order.id} code={code} amountCents={order.amount_cents} sellerName={names.seller} />
+              <BuyerCode orderId={order.id} code={code} amountCents={order.amount_cents} sellerName={names.seller} free={free} />
             ) : (
-              <HandoffForm order={order} payoutCents={payoutCents} buyerName={names.buyer} onDone={load} />
+              <HandoffForm order={order} payoutCents={payoutCents} buyerName={names.buyer} free={free} onDone={load} />
             ))}
 
           {!inUndoWindow && (
@@ -347,8 +366,8 @@ export function OrderView({ id }: { id: number }) {
 
           {order.meetup_deadline && (
             <p className="text-xs text-slate-500">
-              If the handoff hasn&apos;t happened by {formatMeetupTime(order.meetup_deadline, tz)}, the order is cancelled and{' '}
-              {role === 'buyer' ? 'the hold on your card is released' : "the buyer's hold is released"}.
+              If the handoff hasn&apos;t happened by {formatMeetupTime(order.meetup_deadline, tz)}, the order is cancelled
+              {free ? '.' : role === 'buyer' ? ' and the hold on your card is released.' : " and the buyer's hold is released."}
             </p>
           )}
 
@@ -734,11 +753,13 @@ function HandoffForm({
   order,
   payoutCents,
   buyerName,
+  free,
   onDone,
 }: {
   order: Order
   payoutCents: number
   buyerName: string
+  free: boolean
   onDone: () => void
 }) {
   const [code, setCode] = useState('')
@@ -757,7 +778,9 @@ function HandoffForm({
     setSaving(false)
     if (!result.ok) return setError(result.error)
     setDone(
-      result.payoutDueAt
+      free
+        ? `Done! ${buyerName} has it. Leave each other a review below.`
+        : result.payoutDueAt
         ? `Sale complete! We'll send your ${formatCents(result.payoutCents)} payout on ${shortDate(result.payoutDueAt)}. A new seller's first sales are paid a few days after the handoff, to protect everyone from stolen cards.`
         : result.payoutPending
           ? 'Sale complete! Your payout is being processed.'
@@ -771,11 +794,20 @@ function HandoffForm({
   return (
     <form onSubmit={submit} className={card}>
       <p className="flex items-center gap-2 font-bold">
-        <KeyRound className="w-5 h-5 text-[#F26B5B]" /> Complete the sale
+        <KeyRound className="w-5 h-5 text-[#F26B5B]" /> {free ? 'Complete the handoff' : 'Complete the sale'}
       </p>
       <p className="text-sm text-slate-600">
-        Once {buyerName} has checked the item, ask for their 6-digit code and enter it here. We&apos;ll charge their card and
-        send you {formatCents(payoutCents)}. Never hand the item over before the code goes through.
+        {free ? (
+          <>
+            When you meet, ask {buyerName} for their 6-digit code and enter it here. It confirms they&apos;re the person who
+            claimed it, and records the handoff for you both.
+          </>
+        ) : (
+          <>
+            Once {buyerName} has checked the item, ask for their 6-digit code and enter it here. We&apos;ll charge their card
+            and send you {formatCents(payoutCents)}. Never hand the item over before the code goes through.
+          </>
+        )}
       </p>
       <input
         inputMode="numeric"
@@ -789,7 +821,7 @@ function HandoffForm({
       />
       {error && <div className="p-3 rounded-xl text-sm bg-red-50 text-red-700">{error}</div>}
       <button type="submit" disabled={saving} className={`${primaryBtn} w-full`}>
-        {saving ? 'Completing…' : 'Complete sale'}
+        {saving ? 'Completing…' : free ? 'Complete handoff' : 'Complete sale'}
       </button>
       <LocationNote />
     </form>
@@ -901,11 +933,13 @@ function BuyerCode({
   code,
   amountCents,
   sellerName,
+  free = false,
 }: {
   orderId: number
   code: string | null
   amountCents: number
   sellerName: string
+  free?: boolean
 }) {
   const [shown, setShown] = useState(false)
   return (
@@ -927,11 +961,20 @@ function BuyerCode({
           <Eye className="w-4 h-4" /> Show my code
         </button>
       )}
-      <p className="text-sm text-slate-600">
-        Check the item first. Only give this code to {sellerName} once you&apos;re happy with it: entering it charges your card{' '}
-        {formatCents(amountCents)}. If the item isn&apos;t as described, keep the code and cancel the order below.
-      </p>
-      <SecuredByStripe text="Your payment is handled by Stripe." />
+      {free ? (
+        <p className="text-sm text-slate-600">
+          Show this code to {sellerName} when you meet. It confirms you&apos;re the person who claimed it. If you don&apos;t want
+          it after all, keep the code and cancel the order below.
+        </p>
+      ) : (
+        <>
+          <p className="text-sm text-slate-600">
+            Check the item first. Only give this code to {sellerName} once you&apos;re happy with it: entering it charges your
+            card {formatCents(amountCents)}. If the item isn&apos;t as described, keep the code and cancel the order below.
+          </p>
+          <SecuredByStripe text="Your payment is handled by Stripe." />
+        </>
+      )}
       <LocationNote />
     </div>
   )
@@ -1007,10 +1050,12 @@ function CancelOrder({
           onCancel={() => setOpen(false)}
         >
           <p>
-            {role === 'buyer'
-              ? "The hold on your card is released and you won't be charged."
-              : "The buyer's hold is released and they won't be charged."}{' '}
-            {order.listing?.listing_type === 'fixed'
+            {order.listing?.listing_type === 'free'
+              ? ''
+              : role === 'buyer'
+                ? "The hold on your card is released and you won't be charged. "
+                : "The buyer's hold is released and they won't be charged. "}
+            {order.listing?.listing_type !== 'auction'
               ? role === 'seller'
                 ? 'Your listing is paused, and you can relist it in one tap.'
                 : 'The seller can put the item back up for sale.'

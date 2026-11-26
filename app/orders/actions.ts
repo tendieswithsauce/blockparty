@@ -18,12 +18,12 @@ type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string }
  * The seller enters the buyer's handoff code at the meetup. On a match the
  * buyer's card is charged and the seller is paid (price minus the fee),
  * straight away or, for a new seller, a few days later (payoutDueAt).
+ * A free item has nothing to charge or pay: the code just completes it.
  */
 export async function completeHandoff(
   transactionId: number,
   code: string,
 ): Promise<Result<{ payoutCents: number; payoutPending: boolean; payoutDueAt: string | null }>> {
-  if (!stripeConfigured()) return { ok: false, error: 'Payments are not set up yet.' }
   const user = await getCurrentUser()
   if (!user) return { ok: false, error: 'Please sign in.' }
 
@@ -43,6 +43,15 @@ export async function completeHandoff(
     .select('id, listing_id, buyer_id, seller_id, amount_cents, platform_fee_cents, stripe_payment_intent_id')
     .eq('id', transactionId)
     .single()
+  if (txn && txn.amount_cents === 0 && !txn.stripe_payment_intent_id) {
+    const { error: freeError } = await admin.rpc('complete_order', { p_transaction_id: txn.id })
+    if (freeError) {
+      console.error('completeHandoff: complete_order (free) failed', txn.id, freeError)
+      return { ok: false, error: 'Something went wrong. Please try again.' }
+    }
+    return { ok: true, payoutCents: 0, payoutPending: false, payoutDueAt: null }
+  }
+  if (!stripeConfigured()) return { ok: false, error: 'Payments are not set up yet.' }
   if (!txn?.stripe_payment_intent_id) return { ok: false, error: 'This order has no payment to collect.' }
   const payoutCents = txn.amount_cents - txn.platform_fee_cents
 

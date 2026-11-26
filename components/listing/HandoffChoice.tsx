@@ -74,14 +74,17 @@ export function HandoffChoice({
 }
 
 /** The "you must be able to collect it by" warning. */
-export function HandoffDeadlineNote({ deadline, auction }: { deadline: Date; auction: boolean }) {
+export function HandoffDeadlineNote({ deadline, auction, free = false }: { deadline: Date; auction: boolean; free?: boolean }) {
   return (
     <div className="flex items-start gap-2 rounded-xl bg-amber-50 text-amber-900 p-3 text-sm">
       <CalendarClock className="w-4 h-4 shrink-0 mt-0.5" />
       <p>
-        <strong>Only {auction ? 'bid' : 'buy'} if you can get the item by {formatDeadline(deadline)}.</strong>{' '}
+        <strong>
+          Only {auction ? 'bid' : free ? 'claim it' : 'buy'} if you can get the item by {formatDeadline(deadline)}.
+        </strong>{' '}
         {auction ? 'If you win, you have 24 hours to confirm and pay; then you' : 'You'} and the seller have{' '}
-        {HANDOFF_WINDOW_DAYS} days to do the handoff. After that the order is cancelled and the hold on your card is released.
+        {HANDOFF_WINDOW_DAYS} days to do the handoff. After that the order is cancelled
+        {free ? ' and the item goes back to the seller.' : ' and the hold on your card is released.'}
       </p>
     </div>
   )

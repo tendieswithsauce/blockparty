@@ -129,7 +129,7 @@ export function PaymentMethodSection() {
       </div>
       <p className="text-sm text-gray-500 mb-5">
         Saved securely with Stripe; Blockparty never sees or stores your full card number. When you win an auction or buy a
-        set-price item we place a hold on it, and you&apos;re only charged once you&apos;ve met the seller and accepted the item.
+        Buy Now item we place a hold on it, and you&apos;re only charged once you&apos;ve met the seller and accepted the item.
       </p>
 
       {error && <div className="mb-4 p-3 text-sm rounded-lg bg-red-50 text-red-700">{error}</div>}

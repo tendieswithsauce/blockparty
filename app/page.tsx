@@ -5,6 +5,7 @@ import Link from 'next/link'
 import {
   ArrowRight,
   BadgeCheck,
+  Check,
   CreditCard,
   Gavel,
   HeartHandshake,
@@ -23,6 +24,12 @@ import { PLATFORM_FEE_LABEL } from '@/lib/fees'
 import { StripeBadge } from '@/components/StripeBadge'
 import { InstallAppButton } from '@/components/InstallAppButton'
 
+const WHY_SWITCH = [
+  'Your money is held safely until you’ve seen the item. No fake payment screenshots.',
+  'Anyone selling for money is ID-checked, and people who don’t show up get strikes.',
+  'Meet at a safe public spot. Your address and phone number stay private.',
+]
+
 const STEPS = [
   {
     icon: Search,
@@ -32,7 +39,7 @@ const STEPS = [
   {
     icon: Gavel,
     title: 'Buy it or bid',
-    body: "Buy at the set price, or bid in an auction. We place a hold on your card; you aren't charged yet.",
+    body: "Buy it now at the asking price, or bid in an auction. We place a hold on your card; you aren't charged yet.",
   },
   {
     icon: MapPin,
@@ -60,7 +67,7 @@ const SAFETY = [
   {
     icon: BadgeCheck,
     title: 'Verified sellers',
-    body: 'Sellers verify their identity and bank details with Stripe before they can list, so we always know who gets paid.',
+    body: 'Anyone selling for money verifies their identity and bank details with Stripe first, so we always know who gets paid.',
   },
   {
     icon: Star,
@@ -86,10 +93,19 @@ export default function HomePage() {
               {/* Beta tag: remove at full launch (also in components/BrandLogo.tsx). */}
               <sup className="ml-1 align-super text-[0.3em] font-bold uppercase tracking-wider text-[#0E4D5C]">beta</sup>
             </h1>
-            <p className="text-xl sm:text-2xl font-medium text-[#334155]">
-              Buy, sell and bid with your neighbours!
-            </p>
+            <p className="text-2xl sm:text-3xl font-extrabold text-[#0E4D5C]">No scammers. No cash. No wasted trips.</p>
+            <p className="text-lg sm:text-xl font-medium text-[#334155]">Buy, sell and bid with your neighbours.</p>
           </div>
+
+          {/* Why switch from the usual buy-and-sell sites, in plain words. */}
+          <ul className="mt-6 max-w-xl mx-auto space-y-2 text-left text-base sm:text-lg text-[#334155]">
+            {WHY_SWITCH.map((line) => (
+              <li key={line} className="flex items-start gap-3">
+                <Check className="mt-1 w-5 h-5 shrink-0 text-[#2E8B57]" strokeWidth={3} aria-hidden />
+                <span>{line}</span>
+              </li>
+            ))}
+          </ul>
 
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link

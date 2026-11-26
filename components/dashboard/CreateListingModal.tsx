@@ -29,10 +29,13 @@ type Photo = { file: File; preview: string }
 
 export function CreateListingModal({
   defaultArea,
+  freeOnly = false,
   onClose,
   onCreated,
 }: {
   defaultArea?: string
+  /** The seller hasn't set up payouts: they can only give things away (no money involved). */
+  freeOnly?: boolean
   onClose: () => void
   /** 'approved' = live now; 'held' = waiting for a person to review it. */
   onCreated: (result: ModerationResult) => void
@@ -40,7 +43,7 @@ export function CreateListingModal({
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [price, setPrice] = useState('')
-  const [listingType, setListingType] = useState<'fixed' | 'auction'>('fixed')
+  const [listingType, setListingType] = useState<'fixed' | 'auction' | 'free'>(freeOnly ? 'free' : 'fixed')
   const [durationDays, setDurationDays] = useState<number>(3)
   const [useReserve, setUseReserve] = useState(false)
   const [reserve, setReserve] = useState('')
@@ -123,12 +126,13 @@ export function CreateListingModal({
     e.preventDefault()
     setError('')
 
-    const priceCents = dollarsToCents(price)
+    const free = listingType === 'free'
+    const priceCents = free ? 0 : dollarsToCents(price)
     if (priceCents === null) {
       setError('Enter a valid price greater than $0.')
       return
     }
-    if (priceCents < MIN_PRICE_CENTS) {
+    if (!free && priceCents < MIN_PRICE_CENTS) {
       setError(`The lowest price on Blockparty is ${formatCents(MIN_PRICE_CENTS)}.`)
       return
     }
@@ -180,12 +184,12 @@ export function CreateListingModal({
       setError('Choose your area so buyers know roughly where the item is.')
       return
     }
-    if (!offersMeetup && !offersPickup && !offersDelivery) {
+    if (!offersMeetup && !offersPickup && (free || !offersDelivery)) {
       setError('Choose at least one way for the buyer to get the item.')
       return
     }
     let deliveryFeeCents: number | null = null
-    if (offersDelivery) {
+    if (offersDelivery && !free) {
       deliveryFeeCents = deliveryFee.trim() === '' || Number(deliveryFee) === 0 ? 0 : dollarsToCents(deliveryFee)
       if (deliveryFeeCents === null || deliveryFeeCents > 10000) {
         setError('Set a delivery fee between $0 and $100.')
@@ -236,7 +240,7 @@ export function CreateListingModal({
       p_offers_meetup: offersMeetup,
       p_offers_pickup: offersPickup,
       p_delivery_fee_cents: deliveryFeeCents,
-      p_delivery_km: offersDelivery ? deliveryKm : null,
+      p_delivery_km: offersDelivery && !free ? deliveryKm : null,
       p_accepts_offers: listingType === 'fixed' && acceptsOffers,
       p_offer_floor_cents: offerFloorCents,
     })
@@ -397,6 +401,12 @@ export function CreateListingModal({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            {listingType === 'free' ? (
+              <div className="text-sm text-slate-600 self-end">
+                <p className="text-2xl font-extrabold text-[#2E8B57]">Free</p>
+                <p className="text-xs text-gray-500">No fees. The first person to claim it gets it.</p>
+              </div>
+            ) : (
             <div>
               <label htmlFor="listing-price" className="block text-sm font-medium text-gray-700">
                 {listingType === 'auction' ? 'Starting price ($)' : 'Price ($)'}
@@ -422,19 +432,30 @@ export function CreateListingModal({
                 })()}
               </p>
             </div>
+            )}
             <div>
               <label htmlFor="listing-format" className="block text-sm font-medium text-gray-700">Format</label>
               <select
                 id="listing-format"
                 value={listingType}
-                onChange={(e) => setListingType(e.target.value as 'fixed' | 'auction')}
+                onChange={(e) => setListingType(e.target.value as 'fixed' | 'auction' | 'free')}
                 className={inputClass}
               >
-                <option value="fixed">Set Price</option>
-                <option value="auction">Auction</option>
+                <option value="fixed" disabled={freeOnly}>
+                  Buy Now (set your price)
+                </option>
+                <option value="auction" disabled={freeOnly}>
+                  Auction
+                </option>
+                <option value="free">Free (give it away)</option>
               </select>
             </div>
           </div>
+          {freeOnly && (
+            <p className="-mt-2 text-xs text-gray-500">
+              To sell for money, set up payouts from your dashboard first. Giving things away doesn&apos;t need it.
+            </p>
+          )}
 
           {listingType === 'fixed' && (
             <fieldset>
@@ -573,6 +594,7 @@ export function CreateListingModal({
                 )}
               </span>
             </label>
+            {listingType !== 'free' && (
             <div className={`border rounded-xl p-3 ${offersDelivery ? 'border-[#0E4D5C] bg-[#0E4D5C]/5' : ''}`}>
               <label className="flex items-start gap-3">
                 <input
@@ -619,6 +641,7 @@ export function CreateListingModal({
                 </div>
               )}
             </div>
+            )}
           </fieldset>
 
           <div>

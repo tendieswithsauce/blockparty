@@ -22,6 +22,9 @@ import { RatingSummary } from '@/components/Stars'
 import { Avatar } from '@/components/Avatar'
 import { ShareButton } from '@/components/listing/ShareButton'
 import { ListingQuestions } from '@/components/listing/ListingQuestions'
+import { ListingComments } from '@/components/listing/ListingComments'
+import { ClaimPanel } from '@/components/listing/ClaimPanel'
+import { typeBadgeClass, typeLabel } from '@/lib/listing-type'
 import { ViewTracker } from '@/components/listing/ViewTracker'
 import { SafetyMenu } from '@/components/SafetyMenu'
 import { ConvertToAuctionButton } from '@/components/listing/ConvertToAuctionButton'
@@ -108,11 +111,9 @@ async function ListingContent({ id }: { id: string }) {
         <div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span
-              className={`inline-block px-3 py-1 text-xs font-bold rounded-full text-white ${
-                listing.listing_type === 'auction' ? 'bg-[#F26B5B]' : 'bg-[#0E4D5C]'
-              }`}
+              className={`inline-block px-3 py-1 text-xs font-bold rounded-full text-white ${typeBadgeClass(listing.listing_type)}`}
             >
-              {listing.listing_type === 'auction' ? 'Auction' : 'Set Price'}
+              {typeLabel(listing.listing_type, listing.silent)}
             </span>
             <div className="flex items-center gap-2">
               <ShareButton listingId={listing.id} title={listing.title} />
@@ -192,6 +193,10 @@ async function ListingContent({ id }: { id: string }) {
               charityName: listing.charity?.name ?? null,
               handoff,
             }}
+          />
+        ) : listing.listing_type === 'free' ? (
+          <ClaimPanel
+            listing={{ id: listing.id, title: listing.title, sellerId: listing.seller_id, status: listing.status, handoff }}
           />
         ) : listing.listing_type === 'auction' ? (
           <BidPanel
@@ -314,6 +319,7 @@ async function ListingContent({ id }: { id: string }) {
         )}
 
         <ListingQuestions listingId={listing.id} sellerId={listing.seller_id} open={listing.status === 'active' && !block} />
+        <ListingComments listingId={listing.id} open={listing.status === 'active' && !block} />
       </div>
     </div>
   )

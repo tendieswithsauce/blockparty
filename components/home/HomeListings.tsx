@@ -1,6 +1,6 @@
 // components/home/HomeListings.tsx
-// Real listings on the homepage: auctions ending soonest, then the newest
-// listings, from search_listings() like Browse.
+// Real listings on the homepage: auctions ending soonest, the newest
+// listings, then free stuff, from search_listings() like Browse.
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -14,23 +14,28 @@ const COUNT = 4
 export function HomeListings() {
   const [ending, setEnding] = useState<ListingCardData[] | null>(null)
   const [newest, setNewest] = useState<ListingCardData[] | null>(null)
+  const [free, setFree] = useState<ListingCardData[] | null>(null)
 
   useEffect(() => {
     let cancelled = false
     const supabase = createClient()
-    const search = (type: 'auction' | null, sort: 'ending_soon' | 'newest') =>
+    const search = (type: 'auction' | 'free' | null, sort: 'ending_soon' | 'newest') =>
       supabase
         .rpc('search_listings', { p_listing_type: type, p_sort: sort, p_limit: COUNT + 4 })
         .select(LISTING_CARD_COLUMNS)
         .then(({ data }) => (data ?? []) as unknown as ListingCardData[])
-    Promise.all([search('auction', 'ending_soon'), search(null, 'newest')]).then(([auctions, latest]) => {
-      if (cancelled) return
-      const shownAuctions = auctions.slice(0, COUNT)
-      const shownIds = new Set(shownAuctions.map((l) => l.id))
-      setEnding(shownAuctions)
-      // Don't repeat an auction already shown above.
-      setNewest(latest.filter((l) => !shownIds.has(l.id)).slice(0, COUNT))
-    })
+    Promise.all([search('auction', 'ending_soon'), search(null, 'newest'), search('free', 'newest')]).then(
+      ([auctions, latest, freeItems]) => {
+        if (cancelled) return
+        const shownAuctions = auctions.slice(0, COUNT)
+        const shownFree = freeItems.slice(0, COUNT)
+        const shownIds = new Set([...shownAuctions, ...shownFree].map((l) => l.id))
+        setEnding(shownAuctions)
+        setFree(shownFree)
+        // Don't repeat a listing already shown in another row.
+        setNewest(latest.filter((l) => !shownIds.has(l.id)).slice(0, COUNT))
+      },
+    )
     return () => {
       cancelled = true
     }
@@ -40,12 +45,13 @@ export function HomeListings() {
     <>
       <Row title="Auctions ending soon" href="/listings?type=auction&sort=ending_soon" items={ending} empty="No auctions running right now." />
       <Row title="Just listed" href="/listings?sort=newest" items={newest} empty="Nothing new yet. Be the first to list something!" />
+      <Row title="Free stuff" href="/listings?type=free" items={free} empty="" />
     </>
   )
 }
 
 function Row({ title, href, items, empty }: { title: string; href: string; items: ListingCardData[] | null; empty: string }) {
-  if (items !== null && items.length === 0 && title === 'Auctions ending soon') return null
+  if (items !== null && items.length === 0 && title !== 'Just listed') return null
   return (
     <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
       <div className="flex items-end justify-between gap-3 mb-4">
